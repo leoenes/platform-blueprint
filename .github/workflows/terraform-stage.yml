@@ -1,7 +1,7 @@
-name: Terraform stage
+name: Terraform / stage
 
 # One stage = one matrix of independent projects. Reused by terraform.yml
-# (plan/apply) and drift-detection.yml.
+# (plan/apply) and terraform-drift.yml.
 
 on:
   workflow_call:

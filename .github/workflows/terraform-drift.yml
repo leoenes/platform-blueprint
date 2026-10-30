@@ -1,4 +1,4 @@
-name: Drift detection
+name: Terraform / drift
 
 # Nightly: plan every project against main. Anything that is not "No changes"
 # is drift (someone clicked in the console) or an error (provider, lock, auth).

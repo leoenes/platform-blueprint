@@ -1,4 +1,4 @@
-name: Terraform
+name: Terraform / plan-apply
 
 # PR opened/updated  → plan every impacted project, all in parallel (stage 0).
 # Comment `digger apply [-p <project>]` → apply, ordered by dependency depth:

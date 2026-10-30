@@ -1,4 +1,4 @@
-name: Terraform apply reminder
+name: Terraform / apply reminder
 
 # An applied-but-unmerged PR means main no longer describes reality.
 # Twice a day, nag about PRs that had an apply requested and are still open.

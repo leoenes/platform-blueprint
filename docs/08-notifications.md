@@ -3,16 +3,34 @@
 Slack carries outcomes people act on. Nothing is posted for a plan, a green
 build or a routine sync.
 
-| Message | Channel | Trigger | Script |
-| --- | --- | --- | --- |
-| Terraform apply outcome | infra | every `digger apply` run | `.github/scripts/digger/notify-apply-slack.sh` |
-| Drift detected | infra | nightly run with drift or errors | `.github/scripts/drift/notify-slack.sh` |
-| Applied PRs waiting for merge | infra | 07:00 and 19:00 on weekdays | `terraform-apply-reminder.yml` |
-| Ready to promote | deploys | main build green | `.buildkite/scripts/slack-notify.sh` |
-| Promoted / rejected | deploys | block step decision | same |
-| Main build failed | platform-failures | hard failure on main | `failure-notify-trap.sh` |
-| Monthly cost snapshot | cost-reports | 5th of the month | `.github/scripts/cost/snapshot-post.sh` |
-| Credential expiry digest | prod / nonprod | daily, only when something expires within 30 days | (registry-driven; see below) |
+```mermaid
+flowchart LR
+  subgraph sources
+    AP[Terraform apply]
+    DR[nightly drift]
+    RM[applied PRs not merged]
+    RD[main build green]
+    PR[promotion approved / rejected]
+    BF[main build failed]
+    CO[monthly cost snapshot]
+    CE[credential expiry]
+  end
+  AP & DR & RM --> INFRA[#infra]
+  RD & PR --> DEP[#deploys]
+  BF --> FAIL[#platform-failures]
+  CO --> COST[#cost-reports]
+  CE --> ENV["#alerts-prod / #alerts-nonprod"]
+```
+
+| Message | Trigger | Script |
+| --- | --- | --- |
+| Terraform apply outcome | every `digger apply` run | `.github/scripts/digger/notify-apply-slack.sh` |
+| Drift detected | nightly run with drift or errors | `.github/scripts/drift/notify-slack.sh` |
+| Applied PRs waiting for merge | 07:00 and 19:00 on weekdays | `terraform-apply-reminder.yml` |
+| Ready to promote / promoted / rejected | main build green, gate decision | `infra/delivery/scripts/slack-notify.sh` |
+| Main build failed | hard failure on main | failure trap (Buildkite) or `failure()` job (GitHub Actions) |
+| Monthly cost snapshot | 5th of the month | `.github/scripts/cost/snapshot-post.sh` |
+| Credential expiry digest | daily, only when something expires within 30 days | registry-driven |
 
 ## Conventions
 
@@ -25,10 +43,20 @@ build or a routine sync.
 
 ## Cost snapshot
 
-Per member account (the payer view nets to zero after credits): last closed
-month vs the one before, top ten services plus anything over $50, the rest
-folded into "Other". Primary accounts first, then the long tail, then the
-total with its delta.
+```mermaid
+flowchart LR
+  subgraph per account
+    CE[Cost Explorer<br/>last month vs previous<br/>by service] --> J[JSON artifact]
+  end
+  J --> POST[snapshot-post.sh]
+  POST --> H["header: 💰 AWS Cost Snapshot — October 2026"]
+  POST --> P["⭐ primary accounts<br/>top 10 services + anything ≥ $50"]
+  POST --> O["🗄️ other accounts"]
+  POST --> T["total with delta 📈 📉 ➖ 🆕"]
+```
+
+Member accounts are queried directly because the payer view nets to zero
+after credits.
 
 ## Credential expiry
 

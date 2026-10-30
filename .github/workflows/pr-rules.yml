@@ -1,4 +1,4 @@
-name: PR rules
+name: Repo / PR rules
 
 on:
   pull_request:

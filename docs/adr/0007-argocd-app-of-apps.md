@@ -3,7 +3,7 @@
 **Context.** App teams should ship features, not Kubernetes YAML. Platform
 tooling should be upgradable per cluster without Terraform.
 
-**Decision.** Terraform installs ArgoCD, projects and two root apps. The
+**Decision.** Terraform installs ArgoCD, projects and one root app. The
 platform chart renders one Application per tool, disabled per cluster by a
 list in the environment file. Apps declare `.platform/values*.yaml`; the
 presence of a stage/region overlay is the deployment gate. ApplicationSets

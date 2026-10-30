@@ -1,0 +1,2 @@
+# Docs toolchain, pinned. Used by `make docs-*` locally and by the Pages workflow.
+mkdocs-material==9.6.21

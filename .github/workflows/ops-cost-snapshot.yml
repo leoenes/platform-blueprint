@@ -1,4 +1,4 @@
-name: Cost snapshot
+name: Ops / cost snapshot
 
 # Monthly, per account: last closed month vs the one before, top services,
 # posted to Slack. Member accounts are queried directly because the payer
