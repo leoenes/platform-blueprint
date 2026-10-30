@@ -24,6 +24,8 @@ env:
 
 jobs:
   detect:
+    # Only where OIDC trust exists (repository variable TERRAFORM_CI=enabled).
+    if: vars.TERRAFORM_CI == 'enabled'
     runs-on: ubuntu-latest
     outputs:
       stage0-matrix: ${{ steps.impacted.outputs.stage0-matrix }}
