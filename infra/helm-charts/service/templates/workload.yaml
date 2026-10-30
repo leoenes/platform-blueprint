@@ -1,0 +1,83 @@
+{{- /* Preview apps render nothing unless the PR carries the gate label. */ -}}
+{{- $gated := and .Values.preview.gateLabel (not (has .Values.preview.gateLabel (splitList " " (.Values.preview.labels | default "")))) -}}
+{{- if not $gated }}
+{{- $name := .Values.name }}
+{{- $rollout := eq .Values.rollout.strategy "blueGreen" }}
+apiVersion: {{ if $rollout }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}
+kind: {{ if $rollout }}Rollout{{ else }}Deployment{{ end }}
+metadata:
+  name: {{ $name }}
+  labels: { app: {{ $name }} }
+  {{- if not $rollout }}
+  annotations: { reloader.stakater.com/auto: "true" }
+  {{- end }}
+spec:
+  replicas: {{ .Values.autoscaling.minReplicas }}
+  selector:
+    matchLabels: { app: {{ $name }} }
+  {{- if $rollout }}
+  strategy:
+    blueGreen:
+      activeService: {{ $name }}
+      previewService: {{ $name }}-preview
+      autoPromotionSeconds: {{ .Values.rollout.autoPromotionSeconds }}
+  {{- end }}
+  template:
+    metadata:
+      labels: { app: {{ $name }} }
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports: [{ containerPort: {{ .Values.port }} }]
+          readinessProbe:
+            httpGet: { path: {{ .Values.healthCheck.path }}, port: {{ .Values.port }} }
+          resources: {{ toYaml .Values.resources | nindent 12 }}
+          env:
+            - { name: AWS_REGION, value: {{ .Values.global.region | quote }} }
+            - { name: ENVIRONMENT, value: {{ .Values.global.stage | quote }} }
+            {{- range $k, $v := .Values.env }}
+            - { name: {{ $k }}, value: {{ $v | quote }} }
+            {{- end }}
+          {{- if .Values.secrets }}
+          envFrom:
+            - secretRef: { name: {{ $name }}-secrets }
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector: { app: {{ $name }} }
+  ports: [{ port: 80, targetPort: {{ .Values.port }} }]
+{{- if .Values.secrets }}
+---
+# Names in git, values in Secrets Manager.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-secrets
+  labels: { "acme.io/database": {{ if .Values.database.name }}"true"{{ else }}"false"{{ end }} }
+spec:
+  refreshInterval: 1h
+  secretStoreRef: { kind: ClusterSecretStore, name: aws-secrets-manager }
+  target: { name: {{ $name }}-secrets }
+  data:
+    {{- range $env, $ref := .Values.secrets }}
+    - secretKey: {{ $env }}
+      remoteRef: { key: {{ $ref.key }}, property: {{ $ref.property }} }
+    {{- end }}
+{{- end }}
+{{- if gt (int .Values.autoscaling.minReplicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: {{ $name }} }
+{{- end }}
+{{- end }}

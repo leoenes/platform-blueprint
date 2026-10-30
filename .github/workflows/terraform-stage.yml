@@ -1,0 +1,117 @@
+name: Terraform stage
+
+# One stage = one matrix of independent projects. Reused by terraform.yml
+# (plan/apply) and drift-detection.yml.
+
+on:
+  workflow_call:
+    inputs:
+      stage: { type: number, required: true }
+      matrix: { type: string, required: true }
+      mode: { type: string, required: true } # plan | apply
+      checkout-sha: { type: string, required: true }
+      head-sha: { type: string, required: true }
+      pr-number: { type: string, required: false, default: "" }
+      plan-hashes: { type: string, required: false, default: "{}" }
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  project:
+    name: ${{ inputs.mode }} ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.mode == 'apply' && 60 || 30 }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6 # one big change cannot take the whole runner pool
+      matrix: ${{ fromJson(inputs.matrix) }}
+    # Serialize everything that touches the same state file, across plan,
+    # apply and drift runs. The backend lock is the last line of defence,
+    # this queue is the first.
+    concurrency:
+      group: tf-state-${{ matrix.dir }}
+      cancel-in-progress: false
+    env:
+      TG_CI_MODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-sha }}
+
+      - uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Provider cache (restore only on PRs)
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/terraform-providers
+          key: providers-v1-${{ matrix.project }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', matrix.dir), format('{0}/terragrunt.hcl', matrix.dir)) }}
+          restore-keys: providers-v1-${{ matrix.project }}-
+
+      # Cloud identity is chosen from the instance path's <leader>. No static
+      # keys exist for any provider.
+      # AWS: one OIDC exchange into the bootstrap account; Terragrunt
+      # chain-assumes into the project's account from root.hcl.
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !contains(matrix.dir, '/gcp-') }}
+        with:
+          role-to-assume: arn:aws:iam::666666666666:role/gh-actions-terraform
+          aws-region: eu-west-2
+          role-session-name: tf-${{ inputs.mode }}-${{ matrix.project }}
+      # GCP: Workload Identity Federation, no key file.
+      - uses: google-github-actions/auth@v2
+        if: ${{ contains(matrix.dir, '/gcp-') }}
+        with:
+          workload_identity_provider: projects/000000000000/locations/global/workloadIdentityPools/ci/providers/github
+          service_account: terraform@acme-deployment.iam.gserviceaccount.com
+      # Providers without OIDC (Hetzner, GitHub, Cloudflare): short-lived
+      # tokens read from the secrets store at run time, never from repo secrets.
+      - name: Provider tokens
+        if: ${{ contains(matrix.dir, '/hetzner-') || contains(matrix.dir, '/github/') || contains(matrix.dir, 'deployment/buildkite') }}
+        run: |
+          set -euo pipefail
+          for name in HCLOUD_TOKEN CLOUDFLARE_API_TOKEN GITHUB_TOKEN BUILDKITE_API_TOKEN; do
+            v=$(aws secretsmanager get-secret-value --secret-id "ci/provider-tokens" --query SecretString --output text | jq -r --arg k "$name" '.[$k] // empty')
+            [ -n "$v" ] && { echo "::add-mask::$v"; echo "$name=$v" >> "$GITHUB_ENV"; }
+          done
+
+      - name: Authorize apply
+        if: inputs.mode == 'apply'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")
+          [ "$(jq -r .head.sha <<<"$pr")" = "$HEAD_SHA" ] || { echo "::error::PR head moved since the snapshot"; exit 1; }
+          [ "$(jq -r .mergeable <<<"$pr")" = "true" ] || { echo "::error::PR is not mergeable"; exit 1; }
+          approved=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" --jq "[.[] | select(.state == \"APPROVED\" and .commit_id == \"$HEAD_SHA\")] | length")
+          [ "$approved" -gt 0 ] || { echo "::error::no approval on the current head"; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq '.permission' | grep -qE '^(admin|write|maintain)$' || { echo "::error::$COMMENTER cannot apply"; exit 1; }
+
+      - name: Run project
+        env:
+          PROJECT: ${{ matrix.project }}
+          DIR: ${{ matrix.dir }}
+          MODE: ${{ inputs.mode }}
+          STAGE: ${{ inputs.stage }}
+          SNAPSHOT_HEAD_SHA: ${{ inputs.head-sha }}
+          EXPECTED_PLAN_HASH: ${{ fromJson(inputs.plan-hashes)[matrix.project] || '' }}
+          PLAN_FINGERPRINT_KEY: ${{ secrets.PLAN_FINGERPRINT_KEY }}
+          TG_PROVIDER_CACHE_DIR: ${{ runner.temp }}/terraform-providers
+          OUT_DIR: ${{ runner.temp }}/project-out
+        run: .github/scripts/digger/run-project.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage-${{ inputs.stage }}-${{ matrix.project }}
+          path: ${{ runner.temp }}/project-out/result.json
+          retention-days: 7

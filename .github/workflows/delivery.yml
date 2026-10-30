@@ -1,0 +1,123 @@
+name: Delivery
+
+# GitHub Actions implementation of the delivery graph in infra/delivery/README.md.
+# Same scripts as the Buildkite pipeline; the approval gate is a GitHub
+# Environment ("production") with required reviewers instead of a block step.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, labeled]
+  push:
+    branches: [main]
+
+concurrency:
+  group: delivery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  affected:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.list.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: list
+        run: |
+          base="${{ github.event_name == 'push' && 'HEAD^' || format('origin/{0}', github.base_ref) }}"
+          apps=$(infra/delivery/scripts/affected-apps.sh "$base" | jq -R -s -c 'split("\n") | map(select(length>0))')
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: affected
+    if: needs.affected.outputs.apps != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { app: "${{ fromJson(needs.affected.outputs.apps) }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2 # per-app toolchains come from apps/<app>/mise.toml
+      - run: make -C apps/${{ matrix.app }} test lint
+
+  preview:
+    needs: [affected, test]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { app: "${{ fromJson(needs.affected.outputs.apps) }}" }
+    steps:
+      - uses: actions/checkout@v4
+        if: contains(github.event.pull_request.labels.*.name, format('preview-{0}', matrix.app))
+      - uses: docker/setup-buildx-action@v3
+        if: contains(github.event.pull_request.labels.*.name, format('preview-{0}', matrix.app))
+      - if: contains(github.event.pull_request.labels.*.name, format('preview-{0}', matrix.app))
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          infra/delivery/scripts/build-and-push-app.sh "${{ matrix.app }}" "pr-${{ matrix.app }}-$PR_HEAD_SHA"
+          infra/delivery/scripts/preview-comment.sh "${{ matrix.app }}"
+
+  push:
+    needs: [affected, test]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { app: "${{ fromJson(needs.affected.outputs.apps) }}" }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: docker/setup-buildx-action@v3
+      - run: infra/delivery/scripts/build-and-push-app.sh ${{ matrix.app }} rel-${{ github.sha }}
+      - run: infra/delivery/scripts/render-changelog.sh ${{ matrix.app }} >> "$GITHUB_STEP_SUMMARY"
+
+  ready:
+    needs: [affected, push]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - continue-on-error: true
+        env: { SLACK_WEBHOOK_DEPLOYS: "${{ secrets.SLACK_WEBHOOK_DEPLOYS }}" }
+        run: jq -r '.[]' <<<'${{ needs.affected.outputs.apps }}' | xargs infra/delivery/scripts/slack-notify.sh promotions-ready
+
+  # One job per app, gated by the "production" environment's required
+  # reviewers. Approving app A never waits for app B.
+  promote:
+    needs: [affected, ready]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency: { group: prod-promote, cancel-in-progress: false }
+    strategy:
+      max-parallel: 1
+      matrix: { app: "${{ fromJson(needs.affected.outputs.apps) }}" }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Skip apps without a prod overlay
+        id: gate
+        run: ls apps/${{ matrix.app }}/.platform/values-prod-*.yaml >/dev/null 2>&1 && echo "prod=true" >> "$GITHUB_OUTPUT" || echo "prod=false" >> "$GITHUB_OUTPUT"
+      - if: steps.gate.outputs.prod == 'true'
+        env:
+          DEPLOYMENT_APPROVER: ${{ github.triggering_actor }}
+          SLACK_WEBHOOK_DEPLOYS: ${{ secrets.SLACK_WEBHOOK_DEPLOYS }}
+          DEPLOY_APP_ID: ${{ secrets.DEPLOY_APP_ID }}
+          DEPLOY_APP_PRIVATE_KEY: ${{ secrets.DEPLOY_APP_PRIVATE_KEY }}
+        run: infra/delivery/scripts/promote-to-prod.sh ${{ matrix.app }} rel-${{ github.sha }}
+
+  notify-failure:
+    needs: [test, push]
+    if: github.event_name == 'push' && failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env: { SLACK_WEBHOOK_FAILURES: "${{ secrets.SLACK_WEBHOOK_FAILURES }}" }
+        run: infra/delivery/scripts/slack-notify.sh build-failed "${{ github.workflow }}"

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: platform-apps
+description: Cluster tooling as ArgoCD child Applications (app-of-apps)
+type: application
+version: 1.0.0

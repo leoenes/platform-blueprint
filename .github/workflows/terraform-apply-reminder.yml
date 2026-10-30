@@ -1,0 +1,34 @@
+name: Terraform apply reminder
+
+# An applied-but-unmerged PR means main no longer describes reality.
+# Twice a day, nag about PRs that had an apply requested and are still open.
+
+on:
+  schedule:
+    - cron: "0 7,19 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  pull-requests: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_INFRA }}
+          MIN_AGE_HOURS: "2"
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d "-${MIN_AGE_HOURS} hours" +%s 2>/dev/null || date -u -v-"${MIN_AGE_HOURS}"H +%s)
+          lines=""
+          for pr in $(gh pr list --state open --json number --jq '.[].number'); do
+            applied=$(gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments" --paginate \
+              --jq "[.[] | select(.user.type != \"Bot\" and (.body | test(\"^digger apply\")) and ((.created_at | fromdateiso8601) < $cutoff))] | length")
+            [ "$applied" -gt 0 ] && lines="$lines\n• <https://github.com/$GITHUB_REPOSITORY/pull/$pr|PR #$pr> was applied and is still open"
+          done
+          [ -n "$lines" ] || exit 0
+          jq -n --arg t "$(printf '%b' "$lines")" '{text: ":hourglass: *Applied Terraform PRs waiting for merge*\($t)"}' \
+            | curl -sS -o /dev/null -X POST -H 'Content-type: application/json' --data @- "$SLACK_WEBHOOK_URL"

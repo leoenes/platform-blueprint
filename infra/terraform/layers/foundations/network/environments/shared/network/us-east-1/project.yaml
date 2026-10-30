@@ -1,0 +1,2 @@
+# Instance-level dependency: the peering accepter needs the other hub first.
+depends_on: ["network@shared/network/eu-west-2"]

@@ -1,0 +1,26 @@
+# Defaults for every app. Apps override through .platform/values*.yaml;
+# cluster globals arrive from infra/platform-config/environments/<stage>-<region>.yaml.
+global:
+  stage: ""
+  region: ""
+name: ""
+image:
+  repository: ""
+  tag: ""
+port: 8080
+healthCheck:
+  path: /health
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { memory: 512Mi }
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 10
+  cpuUtilization: 70
+rollout:
+  strategy: blueGreen   # blueGreen | none
+  autoPromotionSeconds: 60
+env: {}
+secrets: {}
+database: {}
+preview: {}

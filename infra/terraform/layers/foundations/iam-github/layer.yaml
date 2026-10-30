@@ -1,0 +1,2 @@
+# Workload accounts trust the deployment account's role (chain-assume).
+depends_on: ["iam-github@shared/deployment"]

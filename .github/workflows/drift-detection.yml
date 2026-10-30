@@ -1,0 +1,123 @@
+name: Drift detection
+
+# Nightly: plan every project against main. Anything that is not "No changes"
+# is drift (someone clicked in the console) or an error (provider, lock, auth).
+# Result: one sticky PR holding the plans as evidence, one Slack message with
+# the suggested apply order. The PR is never merged; it is closed when clean.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: drift-detection
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: write
+
+env:
+  DRIFT_BRANCH: drift/auto-detected
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      stage0-matrix: ${{ steps.impacted.outputs.stage0-matrix }}
+      stage0-count: ${{ steps.impacted.outputs.stage0-count }}
+      stage1-matrix: ${{ steps.impacted.outputs.stage1-matrix }}
+      stage1-count: ${{ steps.impacted.outputs.stage1-count }}
+      stage2-matrix: ${{ steps.impacted.outputs.stage2-matrix }}
+      stage2-count: ${{ steps.impacted.outputs.stage2-count }}
+      stage3-matrix: ${{ steps.impacted.outputs.stage3-matrix }}
+      stage3-count: ${{ steps.impacted.outputs.stage3-count }}
+      project-count: ${{ steps.inventory.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: inventory
+        run: echo "count=$(yq '[.projects[] | select(.drift_detection == true)] | length' digger.yml)" >> "$GITHUB_OUTPUT"
+      - id: impacted
+        env:
+          SELECTION_SCOPE: drift
+        run: .github/scripts/digger/compute-impacted.sh
+
+  # Same reusable stage as PR plans. Stages run even if the previous one had
+  # errors: drift in a parent is not a reason to skip looking at the child.
+  stage0:
+    needs: detect
+    if: needs.detect.outputs.stage0-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with: { stage: 0, matrix: "${{ needs.detect.outputs.stage0-matrix }}", mode: plan, checkout-sha: "${{ github.sha }}", head-sha: "${{ github.sha }}" }
+    secrets: inherit
+  stage1:
+    needs: [detect, stage0]
+    if: always() && !cancelled() && needs.detect.result == 'success' && needs.detect.outputs.stage1-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with: { stage: 1, matrix: "${{ needs.detect.outputs.stage1-matrix }}", mode: plan, checkout-sha: "${{ github.sha }}", head-sha: "${{ github.sha }}" }
+    secrets: inherit
+  stage2:
+    needs: [detect, stage1]
+    if: always() && !cancelled() && needs.detect.result == 'success' && needs.detect.outputs.stage2-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with: { stage: 2, matrix: "${{ needs.detect.outputs.stage2-matrix }}", mode: plan, checkout-sha: "${{ github.sha }}", head-sha: "${{ github.sha }}" }
+    secrets: inherit
+
+  stage3:
+    needs: [detect, stage2]
+    if: always() && !cancelled() && needs.detect.result == 'success' && needs.detect.outputs.stage3-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with: { stage: 3, matrix: "${{ needs.detect.outputs.stage3-matrix }}", mode: plan, checkout-sha: "${{ github.sha }}", head-sha: "${{ github.sha }}" }
+    secrets: inherit
+
+  aggregate:
+    needs: [detect, stage0, stage1, stage2, stage3]
+    if: always() && !cancelled() && needs.detect.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stage-*
+          path: results
+      - name: Classify
+        id: agg
+        env:
+          EXPECTED_COUNT: ${{ needs.detect.outputs.project-count }}
+        run: .github/scripts/drift/aggregate.sh results
+      - name: Update or close the sticky drift PR
+        env:
+          GH_TOKEN: ${{ secrets.DRIFT_BOT_TOKEN || github.token }}
+          DRIFTED: ${{ steps.agg.outputs.drifted }}
+          DRIFT_COUNT: ${{ steps.agg.outputs.drift-count }}
+          ERROR_COUNT: ${{ steps.agg.outputs.error-count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$DRIFT_COUNT" != 0 ] || [ "$ERROR_COUNT" != 0 ]; then .github/scripts/drift/sticky-pr.sh update results; else .github/scripts/drift/sticky-pr.sh close; fi
+      - name: Monthly cost of drifted layers (best effort)
+        if: steps.agg.outputs.drift-count != '0'
+        continue-on-error: true
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          DRIFTED: ${{ steps.agg.outputs.drifted }}
+        run: .github/scripts/drift/cost.sh results
+      - name: Notify Slack
+        if: steps.agg.outputs.drift-count != '0' || steps.agg.outputs.error-count != '0'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_INFRA }}
+          GH_TOKEN: ${{ github.token }}
+          DRIFTED: ${{ steps.agg.outputs.drifted }}
+          DRIFT_COUNT: ${{ steps.agg.outputs.drift-count }}
+          ERROR_COUNT: ${{ steps.agg.outputs.error-count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .github/scripts/drift/notify-slack.sh results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: drift-reports
+          path: results
+          retention-days: 30

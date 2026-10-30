@@ -1,0 +1,5 @@
+# Mirrors .buildkite/pipeline.yml; kept here so the pipeline resource is
+# self-contained and the repo file is only a convenience for local reading.
+steps:
+  - label: ":pipeline: generate"
+    command: infra/delivery/buildkite/generate-pipeline.sh | buildkite-agent pipeline upload

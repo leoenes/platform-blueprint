@@ -1,0 +1,30 @@
+# A queue consumer: no port, no ingress, no rollout strategy. The same chart
+# renders it as a plain Deployment scaled by queue depth.
+name: example-worker
+
+image:
+  repository: 666666666666.dkr.ecr.eu-west-2.amazonaws.com/example-worker
+
+port: 0
+healthCheck:
+  path: ""
+
+resources:
+  requests: { cpu: 200m, memory: 512Mi }
+  limits: { memory: 1Gi }
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 20
+  queue:
+    name: example-events
+    targetMessages: 100
+
+rollout:
+  strategy: none
+
+env:
+  QUEUE_NAME: example-events
+
+secrets:
+  DATABASE_URL: { key: svc/example-api/database, property: url } # shares the API's database

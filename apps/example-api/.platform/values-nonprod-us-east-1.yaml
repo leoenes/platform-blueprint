@@ -1,0 +1,4 @@
+# Adding a region for this app is this file. The cluster's ApplicationSet
+# discovers it; nothing else in the repo lists regions.
+autoscaling:
+  minReplicas: 1

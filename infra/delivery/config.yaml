@@ -1,0 +1,31 @@
+# Delivery configuration read by infra/delivery/scripts/*.sh. The scripts do not
+# know which CI runs them (infra/delivery/lib/ci.sh) or which registry/cloud they
+# push to (this file). Switching either is a config change.
+
+registry:
+  kind: ecr            # ecr | gar | ghcr | acr
+  url: 666666666666.dkr.ecr.eu-west-2.amazonaws.com
+  region: eu-west-2
+  preview_repo: preview-apps
+  cache_repo: build-cache
+
+# Which cloud identity the pipeline assumes, by trust level.
+# general: any branch; prod: only main (enforced by the cloud trust policy).
+identity:
+  aws:
+    general_role: arn:aws:iam::666666666666:role/ci-general
+    prod_role: arn:aws:iam::666666666666:role/ci-prod
+  gcp:
+    workload_identity_provider: projects/000000000000/locations/global/workloadIdentityPools/ci/providers/github
+    general_service_account: ci-general@acme-deployment.iam.gserviceaccount.com
+    prod_service_account: ci-prod@acme-deployment.iam.gserviceaccount.com
+
+git:
+  repo: acme/platform
+  default_branch: main
+  deploy_bot: { name: deploy-bot, email: deploy-bot@users.noreply.github.com }
+
+promotion:
+  # Stage/region overlays whose presence gates a prod promotion step.
+  prod_overlay_glob: ".platform/values-prod-*.yaml"
+  allowed_teams: [platform, release-managers]
