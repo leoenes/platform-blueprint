@@ -36,7 +36,7 @@ jobs:
       stage3-count: ${{ steps.impacted.outputs.stage3-count }}
       project-count: ${{ steps.inventory.outputs.count }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: inventory
         run: echo "count=$(yq '[.projects[] | select(.drift_detection == true)] | length' digger.yml)" >> "$GITHUB_OUTPUT"
       - id: impacted
@@ -77,10 +77,10 @@ jobs:
     if: always() && !cancelled() && needs.detect.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: stage-*
           path: results
@@ -115,7 +115,7 @@ jobs:
           ERROR_COUNT: ${{ steps.agg.outputs.error-count }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: .github/scripts/drift/notify-slack.sh results
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: drift-reports

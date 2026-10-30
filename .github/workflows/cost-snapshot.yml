@@ -24,8 +24,8 @@ jobs:
           - { id: "333333333333", name: prod-uk }
           - { id: "666666666666", name: deployment }
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ matrix.account.id }}:role/gh-actions-cost-reader
           aws-region: us-east-1
@@ -33,7 +33,7 @@ jobs:
           ACCOUNT_ID: ${{ matrix.account.id }}
           ACCOUNT_NAME: ${{ matrix.account.name }}
         run: .github/scripts/cost/snapshot.sh out/${{ matrix.account.name }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cost-${{ matrix.account.name }}
           path: out/
@@ -42,8 +42,8 @@ jobs:
     needs: query
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: cost-*
           path: out
