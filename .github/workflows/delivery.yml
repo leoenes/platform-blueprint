@@ -1,7 +1,9 @@
 name: Delivery / GitHub Actions
 
 # GitHub Actions delivery: same scripts as Buildkite; the prod gate is the
-# "production" environment with required reviewers.
+# "production" environment with required reviewers. Jobs that push images or
+# promote run only where repository variable DELIVERY_CI=enabled (registry
+# and cloud trust configured); affected + test always run.
 
 on:
   pull_request:
@@ -47,7 +49,7 @@ jobs:
 
   preview:
     needs: [affected, test]
-    if: github.event_name == 'pull_request'
+    if: vars.DELIVERY_CI == 'enabled' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       matrix: { app: "${{ fromJson(needs.affected.outputs.apps) }}" }
@@ -66,7 +68,7 @@ jobs:
 
   push:
     needs: [affected, test]
-    if: github.event_name == 'push'
+    if: vars.DELIVERY_CI == 'enabled' && github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix: { app: "${{ fromJson(needs.affected.outputs.apps) }}" }
@@ -79,7 +81,7 @@ jobs:
 
   ready:
     needs: [affected, push]
-    if: github.event_name == 'push'
+    if: vars.DELIVERY_CI == 'enabled' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +92,7 @@ jobs:
   # One gated job per app; approvals are independent.
   promote:
     needs: [affected, ready]
-    if: github.event_name == 'push'
+    if: vars.DELIVERY_CI == 'enabled' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     concurrency: { group: prod-promote, cancel-in-progress: false }
@@ -113,7 +115,7 @@ jobs:
 
   notify-failure:
     needs: [test, push]
-    if: github.event_name == 'push' && failure()
+    if: vars.DELIVERY_CI == 'enabled' && github.event_name == 'push' && failure()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

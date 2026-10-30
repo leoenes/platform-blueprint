@@ -127,6 +127,14 @@ the access registry, the GitHub `production` environment and its reviewers.
 Only the per-commit step list is generated at run time, because "build the
 affected apps only" cannot be a static definition.
 
+## Where it runs
+
+`affected` and `test` need no cloud and always run. The jobs that push
+images, open previews or promote run only where the repository variable
+`DELIVERY_CI` is `enabled`, which is how this public copy stays green without
+a registry behind it. Slack notifiers skip themselves when no webhook secret
+is configured.
+
 ## Credentials
 
 ```mermaid

@@ -2,7 +2,8 @@
 # Render the per-account snapshots as one Slack message.
 set -euo pipefail
 dir=${1:?}
-: "${SLACK_WEBHOOK_URL:?}"
+: "${SLACK_WEBHOOK_URL:=}"
+[ -n "$SLACK_WEBHOOK_URL" ] || { echo "no Slack webhook configured; skipping"; exit 0; }
 PRIMARY_NAMES=${PRIMARY_NAMES:-}
 TOP_N=${TOP_N:-10}
 MIN_SHOW=${MIN_SHOW:-50}

@@ -16,5 +16,6 @@ case $kind in
   *) echo "unknown kind $kind" >&2; exit 1 ;;
 esac
 
+[ -n "${hook:-}" ] || { echo "no Slack webhook configured; skipping $kind"; exit 0; }
 jq -n --arg t "$(printf "$text")" '{text: $t}' \
   | curl -sS -o /dev/null -w 'slack: %{http_code}\n' -X POST -H 'Content-type: application/json' --data @- "$hook"

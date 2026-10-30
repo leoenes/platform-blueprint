@@ -2,7 +2,8 @@
 # Slack summary: drifted projects, cost, and topological apply order.
 set -euo pipefail
 results_dir=${1:?}
-: "${SLACK_WEBHOOK_URL:?}" "${DRIFTED:?}" "${DRIFT_COUNT:?}" "${ERROR_COUNT:?}" "${RUN_URL:?}"
+: "${SLACK_WEBHOOK_URL:=}" "${DRIFTED:?}" "${DRIFT_COUNT:?}" "${ERROR_COUNT:?}" "${RUN_URL:?}"
+[ -n "$SLACK_WEBHOOK_URL" ] || { echo "no Slack webhook configured; skipping"; exit 0; }
 
 pr_url=$(gh api "repos/$GITHUB_REPOSITORY/pulls?head=${GITHUB_REPOSITORY%%/*}:${DRIFT_BRANCH:-drift/auto-detected}&state=open" --jq '.[0].html_url // empty' 2>/dev/null || true)
 all=$(find "$results_dir" -name result.json -exec cat {} + | jq -s '.')

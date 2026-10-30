@@ -2,7 +2,8 @@
 # One Slack message per apply run: outcome, who, which PR, per-project results.
 set -euo pipefail
 results_dir=${1:?}
-: "${SLACK_WEBHOOK_URL:?}" "${PR_NUMBER:?}" "${OUTCOME:?}" "${RUN_URL:?}" "${ACTOR:?}"
+: "${SLACK_WEBHOOK_URL:=}" "${PR_NUMBER:?}" "${OUTCOME:?}" "${RUN_URL:?}" "${ACTOR:?}"
+[ -n "$SLACK_WEBHOOK_URL" ] || { echo "no Slack webhook configured; skipping"; exit 0; }
 
 all=$(find "$results_dir" -name result.json -exec cat {} + | jq -s 'sort_by(.stage, .project)')
 pr_url="https://github.com/$GITHUB_REPOSITORY/pull/$PR_NUMBER"

@@ -29,6 +29,6 @@ jobs:
               --jq "[.[] | select(.user.type != \"Bot\" and (.body | test(\"^digger apply\")) and ((.created_at | fromdateiso8601) < $cutoff))] | length")
             [ "$applied" -gt 0 ] && lines="$lines\n• <https://github.com/$GITHUB_REPOSITORY/pull/$pr|PR #$pr> was applied and is still open"
           done
-          [ -n "$lines" ] || exit 0
+          [ -n "$lines" ] && [ -n "$SLACK_WEBHOOK_URL" ] || exit 0
           jq -n --arg t "$(printf '%b' "$lines")" '{text: ":hourglass: *Applied Terraform PRs waiting for merge*\($t)"}' \
             | curl -sS -o /dev/null -X POST -H 'Content-type: application/json' --data @- "$SLACK_WEBHOOK_URL"
