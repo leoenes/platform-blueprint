@@ -125,6 +125,13 @@ match. If the world moved (a console click, a parent layer's outputs), the
 apply refuses. If it matches, the *saved plan file* is applied, not a fresh
 plan. The key keeps a PR author from forging the marker.
 
+## Where it runs
+
+The `detect` job needs no cloud and always runs, so every PR shows which
+projects it impacts and in which stage. The stage jobs assume cloud roles, so
+they run only where the repository variable `TERRAFORM_CI` is `enabled`,
+which is how this public copy stays green without any account behind it.
+
 ## Guards on apply
 
 | Guard | Why |
