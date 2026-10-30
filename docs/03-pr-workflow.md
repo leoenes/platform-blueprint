@@ -15,7 +15,7 @@ sequenceDiagram
   Dev->>PR: review, approve
   Dev->>PR: comment "digger apply"
   PR->>CI: issue_comment
-  CI->>CI: snapshot = merge commit; stages by dependency depth
+  CI->>CI: snapshot = merge commit, stages by dependency depth
   CI->>Cloud: re-plan, compare fingerprint, apply saved plan
   CI->>PR: apply report, reaction 🎉 / 👎
   CI-->>Slack: outcome

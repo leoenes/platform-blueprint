@@ -2,7 +2,7 @@
 # .github/workflows/docs.yml. Local toolchain lives in a git-ignored venv.
 DOCS_VENV := .venv-docs
 
-.PHONY: docs-install docs-serve docs-build docs-check
+.PHONY: docs-install docs-serve docs-build docs-check docs-lint-mermaid
 
 $(DOCS_VENV)/bin/mkdocs: docs/requirements.txt
 	python3 -m venv $(DOCS_VENV)
@@ -18,3 +18,6 @@ docs-build: docs-install ## build the static site into ./site
 
 docs-check: docs-install ## build in strict mode and discard (what CI runs)
 	$(DOCS_VENV)/bin/mkdocs build --strict -d /tmp/platform-blueprint-site -q && rm -rf /tmp/platform-blueprint-site
+
+docs-lint-mermaid: ## validate every Mermaid diagram in docs/ (downloads a headless browser on first run)
+	.make/scripts/lint-mermaid.sh

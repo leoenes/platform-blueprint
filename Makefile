@@ -2,7 +2,7 @@
 # target across them. `make check` is the CI contract.
 
 ENVS := $(wildcard infra/platform-config/environments/*.yaml)
-SH   := $(shell find .github infra/delivery -name '*.sh')
+SH   := $(shell find .github infra/delivery .make -name '*.sh')
 
 include .make/*.mk
 

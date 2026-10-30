@@ -85,7 +85,7 @@ sequenceDiagram
   participant R as registry
   participant Git as main
   G->>S: decision=approve, backup=take|skip
-  S->>Git: fetch; regression guard
+  S->>Git: fetch, regression guard
   alt backup = take
     S->>S: on-demand DB recovery point
     S->>Git: regression guard again
