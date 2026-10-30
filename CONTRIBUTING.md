@@ -11,7 +11,12 @@ mise install   # pins every tool used by the checks
 make check     # fmt, shellcheck, actionlint, helm lint/render, inventory, staging dry-run
 ```
 
-`make help` lists the rest.
+```sh
+make docs-serve   # live preview of the site at http://127.0.0.1:8000/
+```
+
+`make help` lists the rest; targets live in `.make/*.mk`, one file per concern. The published site is
+https://leoenes.github.io/platform-blueprint/, rebuilt on every push to main.
 
 ## Conventions
 

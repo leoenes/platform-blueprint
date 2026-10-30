@@ -1,4 +1,4 @@
-name: Delivery
+name: Delivery / GitHub Actions
 
 # GitHub Actions implementation of the delivery graph in infra/delivery/README.md.
 # Same scripts as the Buildkite pipeline; the approval gate is a GitHub

@@ -1,0 +1,82 @@
+site_name: Platform Blueprint
+site_description: How I build a platform — multi-cloud Terragrunt layers, PR-driven apply, drift detection, trunk-based delivery and GitOps in one monorepo.
+site_url: https://leoenes.github.io/platform-blueprint/
+repo_url: https://github.com/leoenes/platform-blueprint
+repo_name: leoenes/platform-blueprint
+edit_uri: edit/main/docs/
+copyright: MIT — leoenes
+
+theme:
+  name: material
+  icon:
+    logo: material/layers-triple
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Overview: index.md
+  - Guides:
+      - Architecture: 01-architecture.md
+      - Terraform and Terragrunt: 02-terraform-terragrunt.md
+      - PR workflow: 03-pr-workflow.md
+      - Drift detection: 04-drift-detection.md
+      - Trunk-based delivery: 05-trunk-based-delivery.md
+      - GitOps with ArgoCD: 06-gitops.md
+      - Human access: 07-human-access.md
+      - Notifications: 08-notifications.md
+      - Portability: 09-portability.md
+  - Decisions:
+      - adr/README.md
+      - OpenTofu and Terragrunt: adr/0001-opentofu-and-terragrunt.md
+      - One account per blast radius: adr/0002-one-account-per-blast-radius.md
+      - Apply from the PR: adr/0003-apply-from-the-pr.md
+      - Plan fingerprint: adr/0004-plan-fingerprint.md
+      - Drift as a sticky PR: adr/0005-drift-as-a-sticky-pr.md
+      - Trunk-based with promotion commit: adr/0006-trunk-based-with-promotion-commit.md
+      - ArgoCD app-of-apps: adr/0007-argocd-app-of-apps.md
+      - Access registry: adr/0008-access-registry.md
+      - No static credentials: adr/0009-no-static-credentials.md
+      - Fixed points and free choices: adr/0010-fixed-points-and-free-choices.md

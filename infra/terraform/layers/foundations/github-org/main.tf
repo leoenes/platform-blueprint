@@ -58,7 +58,7 @@ resource "github_branch_protection" "main" {
 
   required_status_checks {
     strict   = true
-    contexts = ["danger", "Terraform / inventory", "Terraform / aggregate"]
+    contexts = ["check", "build", "inventory", "aggregate"]
   }
 
   # The deploy bot pushes promotion commits directly (reviewed in the CD gate).

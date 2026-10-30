@@ -1,6 +1,7 @@
 # Platform Blueprint
 
 [![CI](https://github.com/leoenes/platform-blueprint/actions/workflows/ci.yml/badge.svg)](https://github.com/leoenes/platform-blueprint/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-site-0f766e?logo=materialformkdocs&logoColor=white)](https://leoenes.github.io/platform-blueprint/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![OpenTofu](https://img.shields.io/badge/OpenTofu-1.11-yellow?logo=opentofu&logoColor=black)
 ![Terragrunt](https://img.shields.io/badge/Terragrunt-1.0-6f42c1)
@@ -48,7 +49,7 @@ flowchart LR
 | --- | --- | --- |
 | Terragrunt + OpenTofu layers | `infra/terraform/` | path = cloud + tenant + region + layer; a new region is a directory, the inventory and dependency order are generated from the tree |
 | PR-driven plan/apply | `.github/workflows/terraform*.yml`, `digger.yml` | plans in parallel, applies in dependency order, against the plan that was reviewed |
-| Drift detection | `.github/workflows/drift-detection.yml` | the console is not an input; nightly plans become evidence in one sticky PR |
+| Drift detection | `.github/workflows/terraform-drift.yml` | the console is not an input; nightly plans become evidence in one sticky PR |
 | Trunk-based delivery | `infra/delivery/`, `.buildkite/`, `.github/workflows/delivery.yml` | main builds immutable images; nonprod follows automatically, prod is a reviewed commit |
 | GitOps | `infra/platform-config/`, `infra/helm-charts/` | ArgoCD app-of-apps; ApplicationSets rendered per cluster; an app joins a region by adding one values file |
 | Human access registry | `infra/access/`, `modules/human_access` | one YAML per person drives SSO, GitHub, VPN, Slack and database roles |
@@ -56,6 +57,8 @@ flowchart LR
 | Portability | `layers/workloads/gke`, `layers/workloads/hetzner-k3s`, `layers/foundations/github-org` | same conventions on three more providers |
 
 ## Read in this order
+
+Rendered with diagrams at **https://leoenes.github.io/platform-blueprint/**, or in `docs/` here.
 
 1. [Architecture](docs/01-architecture.md): tenants, regions, clouds, blast radius.
 2. [Terraform and Terragrunt](docs/02-terraform-terragrunt.md): the layer model, state and auth per cloud.

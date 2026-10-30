@@ -2,6 +2,16 @@
 
 Short, one decision each. Status is "accepted" unless stated.
 
+```mermaid
+flowchart LR
+  A1[0001 OpenTofu + Terragrunt] --> A2[0002 account per blast radius]
+  A2 --> A3[0003 apply from the PR] --> A4[0004 plan fingerprint] --> A5[0005 drift as a PR]
+  A1 --> A9[0009 no static credentials]
+  A3 --> A6[0006 trunk-based, promotion commit] --> A7[0007 ArgoCD app-of-apps]
+  A2 --> A8[0008 access registry]
+  A1 & A6 & A7 --> A10[0010 fixed points, free choices]
+```
+
 | # | Decision |
 | --- | --- |
 | [0001](0001-opentofu-and-terragrunt.md) | OpenTofu as engine, Terragrunt for path-derived configuration |

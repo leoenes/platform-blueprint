@@ -5,14 +5,15 @@ by every system that grants access.
 
 ```mermaid
 flowchart LR
-  U[infra/access/users.yaml] --> R[modules/human_access resolver]
+  U[infra/access/users.yaml] --> R[modules/human_access<br/>pure Terraform resolver]
   T[infra/access/teams.yaml] --> R
-  R --> IC[IAM Identity Center]
-  R --> GH[GitHub org + teams]
-  R --> VPN[VPN groups]
-  R --> OBS[Observability roles]
-  R --> SL[Slack channels]
-  D[infra/access/databases-env.yaml] --> K8S[DB access reconciler]
+  R -->|catalog| IC[IAM Identity Center]
+  R -->|catalog| GH[GitHub org + teams]
+  R -->|catalog| BK[Buildkite teams]
+  R -->|catalog| VPN[VPN groups]
+  R -->|catalog| OBS[Observability roles]
+  R -->|catalog| SL[Slack channels]
+  D[infra/access/databases-&lt;env&gt;.yaml] --> K8S[in-cluster DB access reconciler]
 ```
 
 ## Rules
@@ -26,26 +27,44 @@ flowchart LR
 | Slack is additive | nobody is removed from a channel by a refactor |
 | Unknown team or duplicate username fails the plan | the registry is validated, not trusted |
 
+```mermaid
+flowchart LR
+  TB["team bundle<br/>github: {role: member, teams: [backend]}<br/>vpn: {groups: [eks-nonprod]}"] --> MERGE{resolve}
+  UO["user override<br/>github: {role: admin}<br/>vpn: null"] --> MERGE
+  MERGE --> OUT["github: {role: admin, teams: [backend]}<br/>vpn: disabled"]
+```
+
 ## One change, every consumer
 
-Every consumer layer lists `infra/access/users.yaml`, `infra/access/teams.yaml` and the
-resolver module in its `include_patterns`. A PR that onboards a person shows
-the plan for the GitHub org, the VPN, the observability roles, the Slack
-invites and Identity Center in one comment, applied in one `digger apply`.
+Every consumer layer lists the registry files and the resolver in its
+`include_patterns`. A PR that onboards a person shows the plan for the
+GitHub org, Buildkite, the VPN, the observability roles, the Slack invites
+and Identity Center in one comment, applied in one `digger apply`. Removing
+a person is deleting a block; every consumer plans the removal.
 
 ## Database access
 
-Database grants live in a per-environment file and are reconciled by a small
-Deployment in the cluster, every 5 minutes:
+Grants live in a per-environment file and are reconciled by a small
+Deployment in the cluster.
 
-1. Validate the file (unknown database, bad level, disabling an environment
-   with live access: fail closed).
-2. Create or update one personal role per person, marked as managed.
-3. Apply exactly the declared grants, revoke everything else, and terminate
-   sessions of anyone downgraded or removed.
-4. Clear passwords every cycle: people connect with 15-minute IAM tokens over
-   TLS, never with a password.
-5. On any failure, suspend every managed human role until the next clean run.
+```mermaid
+stateDiagram-v2
+  [*] --> Validate
+  Validate --> Audit: file valid
+  Validate --> Suspend: unknown DB / bad level / live access on disabled env
+  Audit --> Roles: audit prerequisites ok
+  Roles --> Grants: one managed role per person
+  Grants --> Revoke: exact grants applied
+  Revoke --> Sleep: downgraded or removed people revoked, sessions terminated
+  Sleep --> Validate: every 5 minutes
+  Roles --> Suspend: any failure
+  Grants --> Suspend: any failure
+  Suspend --> Validate: next cycle
+  note right of Suspend: all managed human roles suspended (fail closed)
+```
 
-MFA is enforced in Identity Center, which has no API for it, and is the one
-manual step documented.
+- Passwords are cleared every cycle. People connect with 15-minute IAM
+  tokens over TLS.
+- `default_transaction_read_only` is a guardrail; ACLs are authoritative.
+- MFA is enforced in Identity Center, which has no API for it, and is the
+  one manual step documented.
