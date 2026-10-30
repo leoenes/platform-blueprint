@@ -1,5 +1,4 @@
-# Terraform installs ArgoCD and the root apps; after that, git owns the cluster.
-# This is the only layer that talks to Kubernetes.
+# Installs ArgoCD and the root app; after that, git owns the cluster.
 
 data "aws_eks_cluster" "this" {
   name = var.cluster_name
@@ -24,8 +23,7 @@ provider "kubectl" {
   load_config_file       = false
 }
 
-# Bootstrap-only secrets (repo token, OIDC client) are SOPS-encrypted in git.
-# Everything after bootstrap goes through External Secrets.
+# Bootstrap-only secrets (SOPS); everything else goes through External Secrets.
 data "sops_file" "bootstrap" {
   source_file = "${path.module}/secrets/${var.env}-${var.region}.enc.yaml"
 }
@@ -54,11 +52,8 @@ resource "kubectl_manifest" "repo_credentials" {
   depends_on = [helm_release.argocd]
 }
 
-# Root app: renders platform-apps (cluster tools *and* the ApplicationSets)
-# with this cluster's environment file. Everything the cluster runs descends
-# from this one Application.
-# SkipDryRunOnMissingResource: the chart creates the child Apps that install
-# CRDs *and* CRs that use them; without it the first sync fails dry-run.
+# Root app: platform-apps chart + this cluster's environment file.
+# SkipDryRunOnMissingResource: the chart installs CRDs and CRs in one sync.
 resource "kubectl_manifest" "platform_root" {
   yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"

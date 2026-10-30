@@ -1,7 +1,4 @@
-# Same convention, different cloud. A small k3s cluster on Hetzner Cloud with
-# Cloudflare DNS in front: the layer still reads env/region from its path,
-# still stores state per account, still plans and applies through the same
-# PR workflow. Only the providers changed.
+# k3s on Hetzner with Cloudflare DNS. Same path convention and PR workflow; different providers.
 
 resource "hcloud_network" "this" {
   name     = "${var.env}-${var.region}"

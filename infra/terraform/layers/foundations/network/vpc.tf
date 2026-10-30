@@ -1,8 +1,5 @@
-# One VPC per workload tier, all owned by the network account and shared to
-# workload accounts through RAM. Three subnet classes:
-#   protected  — load balancers only (no public IPs on instances)
-#   private    — nodes, pods
-#   intra      — databases and caches, no route to the internet
+# One VPC per workload tier, RAM-shared to workload accounts.
+# Subnets: protected (LBs), private (nodes), intra (data, no internet route).
 
 module "vpc" {
   for_each = var.workload_vpcs
@@ -39,7 +36,7 @@ resource "aws_flow_log" "vpc" {
   tags                 = { Environment = each.key }
 }
 
-# Share private + intra subnets with the owning workload account.
+# RAM share to the owning workload account.
 resource "aws_ram_resource_share" "vpc" {
   for_each                  = var.workload_vpcs
   name                      = "${var.org}-${each.key}-subnets"

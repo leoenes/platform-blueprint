@@ -1,13 +1,6 @@
-# The role GitHub Actions assumes to run Terraform in this account.
-#
-# Trust has two legs:
-#   1. OIDC from the allowed repositories (no long-lived keys anywhere).
-#   2. Optionally, the same role in the "bootstrap" account, so one OIDC
-#      login can chain-assume into every account (see root.hcl ci_iam_role).
-#
-# Permissions are an explicit allow-list of services plus a few actions,
-# never AdministratorAccess, so a bad plan cannot touch IAM users, billing
-# or the organization.
+# CI role for Terraform in this account. Trusted by GitHub OIDC and,
+# optionally, by the deployment account's role (chain-assume). Permissions
+# are an allow-list, never AdministratorAccess.
 
 data "aws_iam_policy_document" "trust" {
   statement {

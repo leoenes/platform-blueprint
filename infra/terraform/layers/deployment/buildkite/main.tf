@@ -1,11 +1,5 @@
-# Buildkite as code. The pipeline *definition* (what repo, which cluster,
-# which teams may unblock, which branch may promote) lives here. The pipeline
-# *steps* are still generated per commit by infra/delivery/buildkite, because
-# a dynamic pipeline is the only way to build "affected apps only".
-#
-# Everything Terraform owns is what you would otherwise click in the UI:
-# cluster, queue, agent token, pipelines, teams and their members (from the
-# access registry), and the GitHub webhook settings.
+# Buildkite as code: cluster, queue, token, pipeline definition, teams from
+# the access registry. Steps stay dynamic (infra/delivery/buildkite).
 
 module "access" {
   source       = "../../../modules/human_access"
@@ -38,7 +32,7 @@ resource "buildkite_pipeline" "platform" {
   default_branch = "main"
   description    = "Trunk-based delivery: test, build, promote"
 
-  # Only the static entry step lives in the pipeline; it uploads the rest.
+  # Static entry step only; it uploads the generated steps.
   steps = file("${path.module}/files/entry-steps.yml")
 
   provider_settings = {
@@ -56,10 +50,7 @@ resource "buildkite_pipeline" "platform" {
   tags = ["platform", "trunk-based"]
 }
 
-# Teams come from the registry. Buildkite has no API to invite a person, so
-# the invite is a one-time manual step; after that, membership is reconciled
-# here from the registry (a person is in a team when their catalog lists it,
-# and only once their email exists in the organization).
+# No invite API: a person is reconciled into teams once their invite is accepted.
 data "buildkite_organization_members" "all" {}
 
 locals {
@@ -89,7 +80,7 @@ resource "buildkite_team_member" "member" {
   role     = "MEMBER"
 }
 
-# Surfaced in every plan so an onboarding PR shows who still has to accept.
+# Shown in every plan: who still has to accept the invite.
 output "pending_invites" {
   value = local.pending_invites
 }
@@ -101,8 +92,7 @@ resource "buildkite_pipeline_team" "platform" {
   access_level = contains(var.admin_teams, each.key) ? "MANAGE_BUILD_AND_READ" : "BUILD_AND_READ"
 }
 
-# The OIDC trust on the AWS side (ci-general / ci-prod roles) lives in the
-# iam-github layer; this output is what that layer's trust policy pins.
+# Pinned by the ci-general / ci-prod trust policies in the iam-github layer.
 output "oidc_claims" {
   value = {
     organization_slug = var.organization_slug

@@ -1,12 +1,6 @@
-# Terragrunt root. Every instance lives at
-#   layers/<category>/<layer>/environments/<stage>/<leader>/<region>/terragrunt.hcl
-# and only adds an `inputs = {}` block. Backend, cloud, account/project, role
-# and lock timeout are derived from the path, so a new environment, region or
-# even cloud is a new directory plus one entry in `envs` below.
-#
-# <leader> names the tenant inside a stage: a country for the primary cloud
-# (uk, us), or <cloud>-<area> for others (gcp-eu, hetzner-eu), or a shared
-# role (organization, network, deployment, security, github).
+# Instance path: layers/<category>/<layer>/environments/<stage>/<leader>/<region>
+# Backend, cloud, tenant and CI role are derived from it via `envs`.
+# <leader>: country (uk, us), <cloud>-<area> (gcp-eu), or shared role (network).
 
 locals {
   parts    = split("/", path_relative_to_include())
@@ -16,7 +10,7 @@ locals {
   leader   = local.parts[5]
   region   = local.parts[6] # provider region, or "global"
 
-  # One entry per tenant. `cloud` picks the auth path; `state` picks the backend.
+  # One entry per tenant: cloud → auth path, state → backend.
   envs = {
     # ── AWS: one account per blast radius ──────────────────────────────────
     "nonprod/uk"          = { cloud = "aws", id = "111111111111", state = { backend = "s3", bucket = "platform-111111111111-tfstate", region = "eu-west-2" } }
@@ -41,9 +35,8 @@ locals {
 
   state_key = "${local.env_name}/${local.region}/${local.category}/${local.layer}/terraform.tfstate"
 
-  # CI sets TG_CI_MODE=1. AWS: OIDC into the deployment account, then
-  # chain-assume the per-account role. GCP: workload identity in the job,
-  # nothing to assume here. Others: provider tokens in the environment.
+  # TG_CI_MODE=1 in CI. AWS chain-assumes the per-account role; others use
+  # job identity or provider tokens.
   ci_mode = get_env("TG_CI_MODE", "") != ""
 
   aws_profile = local.env.cloud == "aws" && !local.ci_mode ? get_env("TG_PROVIDER_AWS_PROFILE", "${local.env_name}-administrator") : ""
@@ -79,8 +72,7 @@ inputs = {
 }
 
 terraform {
-  # `//` widens the copied tree to infra/terraform so ../../../modules/* refs
-  # resolve inside .terragrunt-cache.
+  # `//` keeps ../../../modules/* resolvable inside .terragrunt-cache.
   source = "${get_repo_root()}/infra/terraform//layers/${local.category}/${local.layer}"
 
   extra_arguments "aws_profile" {
@@ -88,8 +80,7 @@ terraform {
     env_vars = local.aws_profile != "" ? { AWS_PROFILE = local.aws_profile } : {}
   }
 
-  # PR applies, the drift cron and ad-hoc local plans can overlap.
-  # A long lock timeout makes them queue instead of fail.
+  # Overlapping runs (PR, drift, local) queue on the lock instead of failing.
   extra_arguments "lock_timeout" {
     commands  = ["plan", "apply", "destroy", "refresh", "import"]
     arguments = ["-lock-timeout=15m"]

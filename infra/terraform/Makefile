@@ -1,11 +1,7 @@
-# Local helpers. CI never uses these; Digger does. They exist for ad-hoc
-# plans and for the rare bootstrap apply.
-#
-#   make login   INSTANCE=nonprod/uk/eu-west-2
+# Local plan/apply helpers (CI uses the PR workflow, not these).
 #   make plan    LAYER=workloads/eks INSTANCE=nonprod/uk/eu-west-2
-#   make plan-ro LAYER=workloads/eks INSTANCE=prod/uk/eu-west-2   # read-only profile, cannot mutate
+#   make plan-ro LAYER=workloads/eks INSTANCE=prod/uk/eu-west-2   # readonly profile
 #   make apply   LAYER=foundations/iam-github INSTANCE=shared/deployment/eu-west-2
-#   make fmt
 
 LAYER    ?=
 INSTANCE ?=
@@ -37,8 +33,7 @@ login:
 plan: _check
 	cd $(WORKDIR) && $(TG) plan
 
-# Read-only plans refuse to run with ambient credentials so nobody can
-# accidentally plan prod with an admin session.
+# Refuses ambient credentials: prod plans only with the readonly profile.
 plan-ro: _check
 	@if [ -n "$${AWS_ACCESS_KEY_ID:-}$${TG_CI_MODE:-}" ]; then echo "plan-ro needs SSO profiles, not ambient credentials" >&2; exit 1; fi
 	cd $(WORKDIR) && AWS_PROFILE=$(RO_PROFILE) TG_PROVIDER_AWS_PROFILE=$(RO_PROFILE) $(TG) plan -lock=false

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Build apps/<app> and push it as <tag>. Images are immutable: if the tag
-# already exists we skip, so retries and re-runs are free and can never
-# produce a different image for the same commit.
+# Build and push apps/<app>:<tag>. Immutable tags: an existing tag skips the build.
 set -euo pipefail
 app=${1:?app} tag=${2:?tag}
 cd "$(dirname "$0")/../../.."
@@ -23,8 +21,7 @@ if registry_image_exists "$repo" "$tag"; then
 fi
 registry_login
 
-# The app owns its Dockerfile; the platform owns the build invocation.
-# Optional per-app hook for anything the Dockerfile cannot do alone.
+# Optional per-app hook before the build.
 [ -x "apps/$app/.platform/prebuild.sh" ] && "apps/$app/.platform/prebuild.sh"
 
 docker buildx build --push \

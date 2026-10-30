@@ -1,22 +1,14 @@
 #!/usr/bin/env bash
-# Generate digger.yml from the directory tree. Nobody lists regions by hand.
-#
-#   project   = every environments/<stage>/<leader>/<region>/terragrunt.hcl
-#   name      = <layer>[-<stage>-<leader>|-<leader>][-<region>]  (only what is needed to be unique)
-#   patterns  = the layer's *.tf, the instance dir, plus extras from layer.yaml
-#   depends   = layer.yaml `depends_on` (layer names) resolved to the closest
-#               instance of that layer: same stage/leader/region, else same
-#               stage/leader, else same region; `layer@stage/leader[/region]`
-#               pins an instance; project.yaml in an instance dir adds more.
-#
-# Usage: generate-inventory.sh [--check]   (--check fails if digger.yml is stale)
+# Generate digger.yml from environments/**/terragrunt.hcl. Dependencies come
+# from layer.yaml (layer names, resolved to the closest instance; `layer@path`
+# pins one) and instance project.yaml. `--check` fails if digger.yml is stale.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 ROOT=infra/terraform/layers
 
 mapfile -t instances < <(find "$ROOT" -path '*/environments/*/terragrunt.hcl' | sort)
 
-# instance record: category layer stage leader region dir
+# record: category layer stage leader region dir
 rec() { local d; d=$(dirname "$1"); local r=${d#"$ROOT"/}; IFS=/ read -r cat layer _ stage leader region <<<"$r"; echo "$cat $layer $stage $leader $region $d"; }
 declare -a RECS; for i in "${instances[@]}"; do RECS+=("$(rec "$i")"); done
 
@@ -42,8 +34,7 @@ for r in "${RECS[@]}"; do
 done
 
 resolve() { # from-project dep-spec -> project names
-  # Never cross tenants: same stage/leader first; otherwise only a *shared*
-  # instance of the layer (same region preferred). prod never depends on nonprod.
+  # Same tenant first, else a shared instance (same region preferred); never nonprod→prod.
   local from=$1 spec=$2 layer=${2%%@*} pin=""; [[ "$spec" == *@* ]] && pin=${spec#*@}
   local n inst same_inst=() same_tenant=() shared_region=() shared_any=()
   for n in $(printf '%s\n' "${!DIR[@]}" | sort); do

@@ -26,8 +26,7 @@ spec:
         files:
           - path: "apps/*/.platform/values-{{ $env }}.yaml"
   {{- if not $prod }}
-  # Image Updater writes image.tag into spec.sources[1].helm.parameters;
-  # without this the AppSet controller would reset it on every reconcile.
+  # Keep Image Updater's parameter write-back from being reset.
   ignoreApplicationDifferences:
     - jsonPointers: [/spec/sources/1/helm/parameters]
   {{- end }}

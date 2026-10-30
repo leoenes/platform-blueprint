@@ -1,8 +1,5 @@
-# One file per cluster: the cluster's identity and policy. It is the first
-# values file for platform-apps and for every app on this cluster, and it is
-# what the ApplicationSets are rendered from. Adding a cluster = adding one of
-# these plus the Terraform instances; apps join by adding their own
-# values-<stage>-<region>.yaml.
+# One file per cluster: first values file for platform-apps and every app,
+# and the source the ApplicationSets are rendered from.
 global:
   stage: nonprod
   region: eu-west-2

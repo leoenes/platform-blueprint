@@ -1,6 +1,4 @@
-# GKE Autopilot: the GCP counterpart of the eks layer. Same role in the
-# platform (a cluster ArgoCD bootstraps into), same instance convention,
-# different provider and backend.
+# GKE Autopilot: GCP counterpart of the eks layer, same instance convention.
 
 resource "google_compute_network" "this" {
   name                    = "${var.env}-vpc"
@@ -54,8 +52,7 @@ resource "google_container_cluster" "this" {
   }
 }
 
-# ArgoCD/External Secrets use Workload Identity; the equivalent of the EKS
-# Pod Identity association is a single IAM binding.
+# Workload Identity for External Secrets (the EKS Pod Identity equivalent).
 resource "google_service_account" "external_secrets" {
   account_id   = "${var.cluster_name}-eso"
   display_name = "External Secrets for ${var.cluster_name}"

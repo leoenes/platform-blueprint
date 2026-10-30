@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Buildkite only. After promoting <sha>, auto-reject older blocked promotions
-# of the same app: any blocked build whose commit is an ancestor of <sha> is
-# stale. (GitHub Actions has no equivalent: pending environment approvals
-# for older runs are cancelled by the delivery workflow's concurrency group.)
+# Buildkite only: reject blocked promotions of <app> whose commit is an
+# ancestor of <sha>. (GitHub Actions: handled by the concurrency group.)
 set -euo pipefail
 app=${1:?} sha=${2:?}
 : "${BUILDKITE_API_TOKEN:?}"

@@ -1,6 +1,4 @@
-# Delivery configuration read by infra/delivery/scripts/*.sh. The scripts do not
-# know which CI runs them (infra/delivery/lib/ci.sh) or which registry/cloud they
-# push to (this file). Switching either is a config change.
+# Read by infra/delivery/scripts; registry, identity and git settings in one place.
 
 registry:
   kind: ecr            # ecr | gar | ghcr | acr
@@ -9,8 +7,7 @@ registry:
   preview_repo: preview-apps
   cache_repo: build-cache
 
-# Which cloud identity the pipeline assumes, by trust level.
-# general: any branch; prod: only main (enforced by the cloud trust policy).
+# Identity by trust level: general = any branch, prod = main only (cloud trust policy).
 identity:
   aws:
     general_role: arn:aws:iam::666666666666:role/ci-general
@@ -26,6 +23,6 @@ git:
   deploy_bot: { name: deploy-bot, email: deploy-bot@users.noreply.github.com }
 
 promotion:
-  # Stage/region overlays whose presence gates a prod promotion step.
+  # Overlays whose presence gates a prod promotion step.
   prod_overlay_glob: ".platform/values-prod-*.yaml"
   allowed_teams: [platform, release-managers]

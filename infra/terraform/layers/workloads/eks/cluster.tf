@@ -1,6 +1,4 @@
-# EKS control plane on subnets shared by the network account. Node capacity is
-# Karpenter's job (karpenter.tf); the only managed node group is a small
-# "system" pool so Karpenter itself has somewhere to run.
+# EKS on RAM-shared subnets. Karpenter provides capacity; one small system pool hosts it.
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -21,12 +19,10 @@ module "eks" {
     resources        = ["secrets"]
   }
 
-  # Pin KMS admins to account root. The module default uses the caller ARN,
-  # which alternates between SSO admins and the CI role and produced a
-  # one-resource drift on every apply.
+  # Account root, not the caller ARN: SSO vs CI applies otherwise drift every run.
   kms_key_administrators = ["arn:aws:iam::${var.account_id}:root"]
 
-  # Access is declared, never inherited from whoever ran apply.
+  # Access is declared, never inherited from the applier.
   enable_cluster_creator_admin_permissions = false
 
   access_entries = merge(

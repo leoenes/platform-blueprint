@@ -1,7 +1,6 @@
 name: Terraform / stage
 
-# One stage = one matrix of independent projects. Reused by terraform.yml
-# (plan/apply) and terraform-drift.yml.
+# One stage = one matrix of independent projects (used by plan/apply and drift).
 
 on:
   workflow_call:
@@ -28,9 +27,7 @@ jobs:
       fail-fast: false
       max-parallel: 6 # one big change cannot take the whole runner pool
       matrix: ${{ fromJson(inputs.matrix) }}
-    # Serialize everything that touches the same state file, across plan,
-    # apply and drift runs. The backend lock is the last line of defence,
-    # this queue is the first.
+    # Serialize runs on the same state file; the backend lock is the backstop.
     concurrency:
       group: tf-state-${{ matrix.dir }}
       cancel-in-progress: false
@@ -53,24 +50,21 @@ jobs:
           key: providers-v1-${{ matrix.project }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', matrix.dir), format('{0}/terragrunt.hcl', matrix.dir)) }}
           restore-keys: providers-v1-${{ matrix.project }}-
 
-      # Cloud identity is chosen from the instance path's <leader>. No static
-      # keys exist for any provider.
-      # AWS: one OIDC exchange into the bootstrap account; Terragrunt
-      # chain-assumes into the project's account from root.hcl.
+      # Identity by <leader> in the path; no static keys for any provider.
+      # AWS: OIDC into the deployment account, chain-assume from root.hcl.
       - uses: aws-actions/configure-aws-credentials@v4
         if: ${{ !contains(matrix.dir, '/gcp-') }}
         with:
           role-to-assume: arn:aws:iam::666666666666:role/gh-actions-terraform
           aws-region: eu-west-2
           role-session-name: tf-${{ inputs.mode }}-${{ matrix.project }}
-      # GCP: Workload Identity Federation, no key file.
+      # GCP: Workload Identity Federation.
       - uses: google-github-actions/auth@v2
         if: ${{ contains(matrix.dir, '/gcp-') }}
         with:
           workload_identity_provider: projects/000000000000/locations/global/workloadIdentityPools/ci/providers/github
           service_account: terraform@acme-deployment.iam.gserviceaccount.com
-      # Providers without OIDC (Hetzner, GitHub, Cloudflare): short-lived
-      # tokens read from the secrets store at run time, never from repo secrets.
+      # No-OIDC providers: tokens from the secrets store at run time.
       - name: Provider tokens
         if: ${{ contains(matrix.dir, '/hetzner-') || contains(matrix.dir, '/github/') || contains(matrix.dir, 'deployment/buildkite') }}
         run: |

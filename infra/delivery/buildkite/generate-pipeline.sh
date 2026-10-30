@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Buildkite implementation of the delivery graph. Emits the dynamic pipeline
-# for this commit; every step calls the tool-neutral scripts in infra/delivery/scripts.
-#
-# PR:    test → build pr-<app>-<sha> → preview comment   (only with label preview-<app>)
-# main:  test → push rel-<sha> → changelog → notify → [block per app] → promote
+# Buildkite pipeline for this commit, calling infra/delivery/scripts.
+# PR: test → preview build (label preview-<app>). main: test → push → changelog
+# → notify → block per app → promote.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 . infra/delivery/lib/ci.sh
@@ -46,8 +44,7 @@ emit "  - label: \":slack: promotions ready\"" \
      "    soft_fail: true" \
      "    command: infra/delivery/scripts/slack-notify.sh promotions-ready ${apps[*]}"
 
-# Blocks depend on the notify step, not on each other: one approval never
-# waits for another, and a red build (notify skipped) leaves no block to click.
+# Blocks depend on notify, not on each other: approvals are independent.
 teams=$(cfg '.promotion.allowed_teams | join(", ")')
 for app in "${apps[@]}"; do
   compgen -G "apps/$app/$(cfg .promotion.prod_overlay_glob)" >/dev/null || continue # no prod overlay = no prod

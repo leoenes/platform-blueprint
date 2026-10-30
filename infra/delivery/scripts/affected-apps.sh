@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Print the apps affected by the diff against $1, one per line.
-# Language-agnostic: an app is any directory under apps/ with a Dockerfile.
-# It is affected when its own directory, a path it lists in deps.txt, or the
-# shared service chart changed.
+# Apps affected by the diff against $1 (one per line). An app = a directory
+# with a Dockerfile; affected via its dir, deps.txt paths or the service chart.
 set -euo pipefail
 base=${1:?base ref}
 changed=$(git diff --name-only "$base"...HEAD)

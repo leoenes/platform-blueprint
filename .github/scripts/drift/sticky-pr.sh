@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# One long-lived PR carries the drift evidence: the plans, a reconcile list,
-# and a hidden allow-list that the apply authorizer checks before letting
-# `digger apply -p X` run from this PR. The PR is closed when drift clears.
+# Sticky drift PR: plans as evidence plus a hidden apply allow-list; closed when clean.
 set -euo pipefail
 action=${1:?update|close}
 results_dir=${2:-results}

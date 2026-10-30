@@ -1,8 +1,5 @@
-# One-time bootstrap per AWS account. Run with local admin credentials:
-#   cd infra/terraform/setup
-#   tofu init && tofu apply -var-file=envs/acme-nonprod-uk.tfvars
-# The state of this root itself is local on purpose: it creates the bucket
-# that every other layer stores state in.
+# One-time per account, local credentials and local state (it creates the
+# state bucket): tofu init && tofu apply -var-file=envs/<tenant>.tfvars
 
 terraform {
   required_version = ">= 1.10"

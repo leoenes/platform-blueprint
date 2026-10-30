@@ -1,8 +1,7 @@
 name: Delivery / GitHub Actions
 
-# GitHub Actions implementation of the delivery graph in infra/delivery/README.md.
-# Same scripts as the Buildkite pipeline; the approval gate is a GitHub
-# Environment ("production") with required reviewers instead of a block step.
+# GitHub Actions delivery: same scripts as Buildkite; the prod gate is the
+# "production" environment with required reviewers.
 
 on:
   pull_request:
@@ -88,8 +87,7 @@ jobs:
         env: { SLACK_WEBHOOK_DEPLOYS: "${{ secrets.SLACK_WEBHOOK_DEPLOYS }}" }
         run: jq -r '.[]' <<<'${{ needs.affected.outputs.apps }}' | xargs infra/delivery/scripts/slack-notify.sh promotions-ready
 
-  # One job per app, gated by the "production" environment's required
-  # reviewers. Approving app A never waits for app B.
+  # One gated job per app; approvals are independent.
   promote:
     needs: [affected, ready]
     if: github.event_name == 'push'

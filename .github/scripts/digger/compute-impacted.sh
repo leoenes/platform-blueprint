@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# Turn "which files changed" into "which projects run, in which stage".
-#
-# Inputs (env): EVENT_NAME, COMMENT_BODY, CHANGED_FILES, SELECTION_SCOPE (pr|drift)
-# Outputs ($GITHUB_OUTPUT): mode, has-projects, stage<N>-matrix, stage<N>-count
-#
-# Rules:
-#   - a project is impacted when a changed file is under its dir or matches
-#     one of its include_patterns
-#   - `digger apply -p X` overrides diff detection with exactly X
-#   - depends_on never widens the set; it only orders applies
-#   - PR plans are flattened to stage 0 (plans are read-only, run them all at once)
-#   - applies and drift use depth(p) = 1 + max(depth(parents)) as the stage
+# Changed files → impacted projects → per-stage matrices.
+# In: EVENT_NAME COMMENT_BODY CHANGED_FILES SELECTION_SCOPE(pr|drift)
+# Out: mode has-projects stage<N>-matrix stage<N>-count
+# depends_on only orders (never widens); PR plans flatten to stage 0;
+# applies/drift use depth = 1 + max(depth of impacted parents).
 set -euo pipefail
 
 MAX_STAGE=${MAX_STAGE:-3}
@@ -29,14 +22,14 @@ fi
 CFG_JSON=$(yq -o=json '.' digger.yml)
 
 declare -A DIR DEPS INDEX
-# index before deps: tabs collapse in `read`, so the possibly-empty field goes last
+# possibly-empty deps last: consecutive tabs collapse in `read`
 while IFS=$'\t' read -r name dir idx deps; do
   DIR["$name"]=$dir; INDEX["$name"]=$idx; DEPS["$name"]=${deps:-}
 done < <(jq -r '.projects | to_entries[] | [.value.name, .value.dir, .key, ((.value.depends_on // []) | join(" "))] | @tsv' <<<"$CFG_JSON")
 
 glob_to_regex() {
   local g=$1
-  # shellcheck disable=SC2001,SC2016  # regex metacharacters are escaped literally
+  # shellcheck disable=SC2001,SC2016
   g=$(sed -e 's/[.+^$(){}|\\]/\\&/g' <<<"$g")
   g=${g//\*\*/__DS__}
   g=${g//\*/[^/]*}

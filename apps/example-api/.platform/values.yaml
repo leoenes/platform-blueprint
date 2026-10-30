@@ -1,10 +1,9 @@
-# App-owned deployment contract. The platform renders this through the shared
-# service chart; the app team never writes Kubernetes YAML.
+# App-owned deployment contract, rendered by the shared service chart.
 name: example-api
 
 image:
   repository: 666666666666.dkr.ecr.eu-west-2.amazonaws.com/example-api
-  # tag is set by Image Updater (nonprod) or the promotion commit (prod)
+  # tag: Image Updater (nonprod) or the promotion commit (prod)
 
 port: 8080
 healthCheck:
@@ -26,7 +25,7 @@ rollout:
 env:
   LOG_LEVEL: info
 
-# Secret *names* live in git, values live in Secrets Manager.
+# Names in git, values in Secrets Manager.
 secrets:
   DATABASE_URL: { key: svc/example-api/database, property: url }
   API_TOKEN: { key: svc/example-api/tokens, property: api }

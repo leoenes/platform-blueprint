@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# Run one project in one mode and always leave a result.json behind.
-#
-# The interesting part is the plan fingerprint. On plan we hash the *semantic*
-# content of the plan (resource changes that are not no-ops, sorted) with a
-# secret key and publish the hash in the PR comment. On apply we re-plan from
-# the same snapshot and refuse to continue unless the hash matches the one that
-# was reviewed. Then we apply that saved plan file, not a fresh one.
+# Run one project (plan|apply); always write result.json.
+# Plan: keyed sha256 of the semantic plan → PR comment. Apply: re-plan, require
+# the same hash, then apply the saved plan file.
 set -uo pipefail
 
 : "${PROJECT:?}" "${DIR:?}" "${MODE:?}" "${STAGE:?}" "${SNAPSHOT_HEAD_SHA:?}"
@@ -30,7 +26,7 @@ plan_file=$RUNNER_TEMP/plan-$PROJECT.tfplan
 raw=$OUT_DIR/raw.txt
 out=$OUT_DIR/out.txt
 
-# Noise we never want in a PR comment.
+# Lines stripped from PR output.
 NOISE='^(Refreshing state|Reading\.\.\.|Read complete|Acquiring state lock|Releasing state lock|.*terragrunt-cache.*|.*Initializing (the backend|provider plugins|modules).*|.*has been successfully initialized.*)'
 
 (cd "$DIR" && terragrunt plan -out="$plan_file" -no-color) > "$raw" 2>&1
@@ -50,8 +46,7 @@ fi
 summary=$(grep -oE 'Plan: [0-9]+ to (import, [0-9]+ to )?add, [0-9]+ to change, [0-9]+ to destroy\.' "$raw" | tail -1)
 [ -n "$summary" ] || summary="No changes"
 
-# Semantic fingerprint: only what would change, independent of ordering,
-# timestamps and refresh-only drift.
+# Semantic fingerprint: non-no-op changes, sorted.
 semantic=$(cd "$DIR" && terragrunt show -json "$plan_file" 2>/dev/null | jq -S -c '{
   resource_changes: ([.resource_changes[]? | select(.change.actions != ["no-op"]) | {address, actions: .change.actions, after: .change.after}] | sort_by(.address)),
   output_changes: ([.output_changes // {} | to_entries[] | select(.value.actions != ["no-op"]) | {name: .key, actions: .value.actions}] | sort_by(.name))

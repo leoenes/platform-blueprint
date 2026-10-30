@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Slack Block Kit summary of drift: what drifted, what it costs, and the
-# order to apply in (topological over depends_on, limited to drifted projects).
+# Slack summary: drifted projects, cost, and topological apply order.
 set -euo pipefail
 results_dir=${1:?}
 : "${SLACK_WEBHOOK_URL:?}" "${DRIFTED:?}" "${DRIFT_COUNT:?}" "${ERROR_COUNT:?}" "${RUN_URL:?}"
@@ -20,7 +19,7 @@ for p in $DRIFTED; do
   lines="$lines\n• \`$name\` — ${summary:-no result}$cost"
 done
 
-# Suggested apply order: DFS over depends_on, only drifted names, parents first.
+# Apply order: DFS over depends_on, drifted names only.
 declare -A deps seen
 while IFS=$'\t' read -r n d; do deps[$n]=$d; done < <(yq -o=json '.' digger.yml | jq -r '.projects[] | [.name, ((.depends_on // []) | join(" "))] | @tsv')
 drifted_names=$(for p in $DRIFTED; do case $p in *"(error)") ;; *) echo "$p";; esac; done)

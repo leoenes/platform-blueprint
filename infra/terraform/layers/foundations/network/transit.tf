@@ -1,6 +1,4 @@
-# Regional Transit Gateway: hub for workload VPCs, the VPN/zero-trust VPC and
-# cross-region peering. Attachments are not auto-accepted; each one is a
-# reviewed change in this layer.
+# Regional Transit Gateway hub. Attachments are never auto-accepted.
 
 module "tgw" {
   source  = "terraform-aws-modules/transit-gateway/aws"
@@ -24,8 +22,7 @@ module "tgw" {
   tags = var.tags
 }
 
-# Cross-region peering to the other hub (us-east-1 <-> eu-west-2). Created on
-# the "requester" side only; the accepter lives in the other region's instance.
+# Cross-region peering, requester side; the accepter is the other region's instance.
 resource "aws_ec2_transit_gateway_peering_attachment" "peer" {
   count = var.peer_tgw_id != "" ? 1 : 0
 

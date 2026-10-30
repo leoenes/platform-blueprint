@@ -1,7 +1,4 @@
-# Pure resolver: users.yaml + teams.yaml → one catalog per person.
-# No providers. Every consumer layer (github-org, vpn, observability, slack,
-# identity) instantiates this and reads `catalog`, so the merge rules exist
-# in exactly one place.
+# Pure resolver (no providers): users.yaml + teams.yaml → catalog per person.
 
 locals {
   users = yamldecode(file("${var.registry_dir}/users.yaml")).people
@@ -9,7 +6,7 @@ locals {
 
   services = ["github", "buildkite", "vpn", "observability", "slack"]
 
-  # Union of each service's bundle across the person's teams.
+  # Union of bundles across the person's teams.
   inherited = {
     for handle, u in local.users : handle => {
       for svc in local.services : svc => {
@@ -22,8 +19,7 @@ locals {
     }
   }
 
-  # Explicit user field replaces the inherited one; `null` disables the
-  # service; Slack channels are additive.
+  # User field replaces the bundle; `null` disables; Slack is additive.
   catalog = {
     for handle, u in local.users : handle => {
       identity_center_username = u.identityCenterUsername

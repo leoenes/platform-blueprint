@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Two channels, two audiences:
-#   deploys   — promotions-ready, prod-committed, prod-rejected (people who ship)
-#   failures  — build-failed (people who fix the platform)
+# deploys channel: promotion events; failures channel: build-failed.
 set -euo pipefail
 kind=${1:?} ; shift
 apps=("$@")

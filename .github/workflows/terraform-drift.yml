@@ -1,9 +1,7 @@
 name: Terraform / drift
 
-# Nightly: plan every project against main. Anything that is not "No changes"
-# is drift (someone clicked in the console) or an error (provider, lock, auth).
-# Result: one sticky PR holding the plans as evidence, one Slack message with
-# the suggested apply order. The PR is never merged; it is closed when clean.
+# Nightly plan of every project. Drift and errors go to one sticky PR (never
+# merged, closed when clean) and one Slack message with the apply order.
 
 on:
   schedule:
@@ -24,7 +22,7 @@ env:
 
 jobs:
   detect:
-    # Only where OIDC trust exists (repository variable TERRAFORM_CI=enabled).
+    # Needs cloud trust: repository variable TERRAFORM_CI=enabled.
     if: vars.TERRAFORM_CI == 'enabled'
     runs-on: ubuntu-latest
     outputs:
@@ -46,8 +44,7 @@ jobs:
           SELECTION_SCOPE: drift
         run: .github/scripts/digger/compute-impacted.sh
 
-  # Same reusable stage as PR plans. Stages run even if the previous one had
-  # errors: drift in a parent is not a reason to skip looking at the child.
+  # Same stage workflow as PR plans; a failed parent does not skip the child.
   stage0:
     needs: detect
     if: needs.detect.outputs.stage0-count != '0'

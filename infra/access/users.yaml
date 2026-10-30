@@ -1,10 +1,5 @@
-# Human access registry: one entry per person drives every system.
-# Identity, SSO and database grants are never inherited from a team bundle;
-# everything else (Slack, GitHub teams, VPN groups, SaaS roles) can be.
-#
-# Changing this file impacts every consumer project in digger.yml, so one PR
-# shows the plan for all of them: IAM Identity Center, GitHub org, VPN,
-# observability roles, Slack channels, and per-database roles.
+# One entry per person drives every system. Identity, SSO and DB grants are
+# never inherited from a team; list-like access (Slack, teams, VPN, roles) is.
 
 people:
   jdoe:

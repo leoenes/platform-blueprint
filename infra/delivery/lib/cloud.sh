@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Cloud adapter for the registry and identity. Source after ci.sh.
-#
-#   cloud_login <general|prod>   exchange the CI OIDC token for cloud creds
-#   registry_login               docker login to the configured registry
-#   registry_image_exists repo tag
-#   registry_tag_image repo tag new_tag   (protect a prod image from lifecycle)
+# Cloud/registry adapter (source after ci.sh): cloud_login <general|prod>,
+# registry_login, registry_image_exists repo tag, registry_tag_image repo tag new.
 set -euo pipefail
 
 cloud_login() {

@@ -1,6 +1,4 @@
-# GitHub organization as code, driven by the same registry as everything else.
-# Also the proof that the layer/instance convention is not AWS-specific: this
-# layer has no AWS provider at all, only its state lives in S3.
+# GitHub org as code from the access registry. No AWS provider; only state in S3.
 
 module "access" {
   source       = "../../../modules/human_access"
@@ -43,7 +41,7 @@ resource "github_repository" "platform" {
   vulnerability_alerts   = true
 }
 
-# Trunk-based: nothing lands on main without a PR, a review and green checks.
+# Nothing lands on main without a PR, a review and green checks.
 resource "github_branch_protection" "main" {
   repository_id          = github_repository.platform.node_id
   pattern                = "main"
@@ -61,13 +59,11 @@ resource "github_branch_protection" "main" {
     contexts = ["check", "build", "inventory", "aggregate"]
   }
 
-  # The deploy bot pushes promotion commits directly (reviewed in the CD gate).
+  # Deploy bot may push promotion commits (reviewed in the CD gate).
   push_restrictions = [var.deploy_app_node_id]
 }
 
-# The GitHub Actions prod gate, defined the same way the Buildkite one is
-# (deployment/buildkite layer): who may approve is a registry team, not a
-# setting someone clicked.
+# GitHub Actions prod gate; approvers are registry teams (see deployment/buildkite).
 resource "github_repository_environment" "production" {
   repository          = github_repository.platform.name
   environment         = "production"

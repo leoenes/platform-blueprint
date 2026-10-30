@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# Promote <app> to production by committing the image tag to main.
-#
-# Prod is a git commit, not a button: the prod ApplicationSet reads the app's
-# values at the SHA embedded in the tag, so merged-but-unpromoted changes
-# never reach prod. The regression guard refuses to move prod backwards.
-# Runs the same under Buildkite (block step fields) and GitHub Actions
-# (environment approval); the CI adapter hides the difference.
+# Promote <app>: commit image.tag to main; ArgoCD prod renders at that SHA.
+# Regression guard keeps prod monotonic. CI-agnostic via lib/ci.sh.
 set -euo pipefail
 app=${1:?app} tag=${2:?rel-<sha>}
 cd "$(dirname "$0")/../../.."
@@ -40,7 +35,7 @@ if [ "$backup" = take ]; then
   guard # the backup can take a while; re-check that nobody promoted meanwhile
 fi
 
-# Deploy App token is minted after the backup so it cannot expire mid-run.
+# Token minted after the backup so it cannot expire mid-run.
 token=$(infra/delivery/scripts/github-app-token.sh deploy)
 git checkout -B promote "origin/$(cfg .git.default_branch)"
 for f in "${overlays[@]}"; do yq -i ".image.tag = \"$tag\"" "$f"; done
@@ -54,7 +49,7 @@ Approved-by: $(ci_approver)
 Build: $(ci_build_url)"
 git push "https://x-access-token:${token}@github.com/$(cfg .git.repo).git" "HEAD:$(cfg .git.default_branch)"
 
-# Lifecycle policies expire old images; a prod image must never be one of them.
+# Protect the prod image from registry lifecycle expiry.
 registry_tag_image "$app" "$tag" "keep-prod-$new_sha" || true
 
 ci_annotate "promote-$app" success "Promoted $app to $tag. ArgoCD prod will sync at $new_sha."

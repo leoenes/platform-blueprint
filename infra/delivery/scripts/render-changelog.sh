@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Commits between what prod runs and HEAD, scoped to the app and the paths it
-# depends on. Never fails a step: a missing changelog is not a reason to block
-# a deploy.
+# Commits from the prod SHA to HEAD, scoped to the app and its deps. Never fails.
 set -uo pipefail
 app=${1:?}
 trap 'exit 0' ERR
