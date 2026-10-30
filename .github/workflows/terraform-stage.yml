@@ -37,17 +37,17 @@ jobs:
     env:
       TG_CI_MODE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.checkout-sha }}
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v5
         with:
           install: true
           cache: true
 
       - name: Provider cache (restore only on PRs)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/terraform-providers
           key: providers-v1-${{ matrix.project }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', matrix.dir), format('{0}/terragrunt.hcl', matrix.dir)) }}
@@ -57,14 +57,14 @@ jobs:
       # keys exist for any provider.
       # AWS: one OIDC exchange into the bootstrap account; Terragrunt
       # chain-assumes into the project's account from root.hcl.
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         if: ${{ !contains(matrix.dir, '/gcp-') }}
         with:
           role-to-assume: arn:aws:iam::666666666666:role/gh-actions-terraform
           aws-region: eu-west-2
           role-session-name: tf-${{ inputs.mode }}-${{ matrix.project }}
       # GCP: Workload Identity Federation, no key file.
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         if: ${{ contains(matrix.dir, '/gcp-') }}
         with:
           workload_identity_provider: projects/000000000000/locations/global/workloadIdentityPools/ci/providers/github
@@ -109,7 +109,7 @@ jobs:
           OUT_DIR: ${{ runner.temp }}/project-out
         run: .github/scripts/digger/run-project.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: stage-${{ inputs.stage }}-${{ matrix.project }}
