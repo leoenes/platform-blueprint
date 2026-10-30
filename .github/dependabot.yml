@@ -1,0 +1,12 @@
+# Renovate (renovate.json) is the intended updater for Terraform, Helm and
+# mise pins, but it needs the app installed. Dependabot is built in, so the
+# workflow actions at least stay current on a public repo.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

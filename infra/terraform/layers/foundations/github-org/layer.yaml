@@ -1,0 +1,4 @@
+include_patterns:
+  - "infra/access/users.yaml"
+  - "infra/access/teams.yaml"
+  - "infra/terraform/modules/human_access/**"

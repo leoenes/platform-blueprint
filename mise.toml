@@ -1,0 +1,14 @@
+# Tool versions are pinned here and installed by `mise install` locally and in
+# CI, so a check on a laptop and a check in GitHub Actions run the same binaries.
+[tools]
+opentofu   = "1.11.5"
+terragrunt = "1.0.6"
+infracost  = "0.10.39"
+kubectl    = "1.35.4"
+helm       = "3.20.2"
+argocd     = "3.4.1"
+awscli     = "2.34.45"
+jq         = "1.8.1"
+yq         = "4.47.1"
+shellcheck = "0.10.0"
+actionlint = "1.7.7"

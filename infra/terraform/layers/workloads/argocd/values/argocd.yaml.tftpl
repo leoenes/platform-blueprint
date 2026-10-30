@@ -1,0 +1,23 @@
+global:
+  domain: argocd.${base_domain}
+configs:
+  params:
+    server.insecure: true # TLS terminates at the ALB
+  cm:
+    oidc.config: |
+      name: SSO
+      issuer: https://sso.example.com
+      clientID: ${oidc_client}
+      clientSecret: $oidc:clientSecret
+  rbac:
+    policy.default: role:readonly
+    policy.csv: |
+      g, platform-admins, role:admin
+server:
+  replicas: 2
+controller:
+  replicas: 1
+repoServer:
+  replicas: 2
+applicationSet:
+  replicas: 2

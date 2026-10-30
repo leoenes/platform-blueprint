@@ -1,0 +1,29 @@
+# Second region, same stage. Previews here answer to `preview-<app>@us-east-1`.
+global:
+  stage: nonprod
+  region: us-east-1
+  accountId: "222222222222"
+  clusterName: nonprod-us
+  ecrRegistry: 666666666666.dkr.ecr.eu-west-2.amazonaws.com
+  baseDomain: us.nonprod.example.com
+  previewDomainSuffix: preview.us.nonprod.example.com
+
+preview:
+  enabled: true
+  default: false
+
+disabledTools: []
+disabledServices: []
+
+karpenter:
+  version: 1.15.1
+  capacityTypes: [spot, on-demand]
+  instanceFamilies: [m6i, m6a]
+
+databases:
+  - example_api
+
+dbSnapshot:
+  enabled: true
+  schedule: "0 3,15 * * *"
+  bucket: acme-nonprod-us-db-snapshots

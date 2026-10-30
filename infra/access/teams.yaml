@@ -1,0 +1,16 @@
+# Team bundles. Only list-like, low-risk access lives here.
+teams:
+  platform:
+    access:
+      github: { role: member, teams: [platform, release-managers] }
+      buildkite: { role: MEMBER, teams: [platform, release-managers] }
+      vpn: { groups: [eks-nonprod, eks-prod, databases] }
+      observability: { roles: [admin] }
+      slack: { channels: [deploys, platform-failures, cost-reports] }
+  backend:
+    access:
+      github: { role: member, teams: [backend] }
+      buildkite: { role: MEMBER, teams: [backend] }
+      vpn: { groups: [eks-nonprod] }
+      observability: { roles: [standard] }
+      slack: { channels: [deploys] }

@@ -1,0 +1,54 @@
+name: Cost snapshot
+
+# Monthly, per account: last closed month vs the one before, top services,
+# posted to Slack. Member accounts are queried directly because the payer
+# view nets to ~0 after credits; the payer is queried once for the rest.
+
+on:
+  schedule:
+    - cron: "0 9 5 * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        account:
+          - { id: "111111111111", name: nonprod-uk }
+          - { id: "222222222222", name: nonprod-us }
+          - { id: "333333333333", name: prod-uk }
+          - { id: "666666666666", name: deployment }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ matrix.account.id }}:role/gh-actions-cost-reader
+          aws-region: us-east-1
+      - env:
+          ACCOUNT_ID: ${{ matrix.account.id }}
+          ACCOUNT_NAME: ${{ matrix.account.name }}
+        run: .github/scripts/cost/snapshot.sh out/${{ matrix.account.name }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cost-${{ matrix.account.name }}
+          path: out/
+
+  post:
+    needs: query
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cost-*
+          path: out
+          merge-multiple: true
+      - env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_COSTS }}
+          PRIMARY_NAMES: "prod-uk nonprod-uk nonprod-us"
+        run: .github/scripts/cost/snapshot-post.sh out

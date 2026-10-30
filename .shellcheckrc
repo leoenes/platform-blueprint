@@ -1,0 +1,4 @@
+# Scripts source each other relative to the repo root.
+source-path=SCRIPTDIR
+# printf with a variable format is used on purpose for Slack text with \n.
+disable=SC2059

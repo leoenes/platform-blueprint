@@ -1,0 +1,14 @@
+# Per-environment database access. Grants are explicit per person; nothing is
+# inherited. A Kubernetes reconciler applies this every 5 minutes and, on any
+# failure, suspends every managed human role (fail closed).
+enabled: true
+audit: connections            # connections | pgaudit
+databases: [example_api, reporting]
+people:
+  jdoe:
+    auth: iam                  # 15-minute IAM tokens, no passwords
+    allDatabases: rw
+  asmith:
+    auth: iam
+    grants:
+      example_api: ro

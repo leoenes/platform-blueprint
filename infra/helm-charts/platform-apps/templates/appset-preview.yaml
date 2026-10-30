@@ -1,0 +1,67 @@
+{{- /*
+PR previews on this cluster, if the environment file enables them. The gate
+label is `preview-<app>` on the cluster marked preview.default, and
+`preview-<app>@<region>` elsewhere, so a second preview region needs no
+change to the delivery scripts.
+*/ -}}
+{{- if and (ne .Values.global.stage "prod") .Values.preview.enabled }}
+{{- $env := printf "%s-%s" .Values.global.stage .Values.global.region }}
+{{- $suffix := ternary "" (printf "@%s" .Values.global.region) .Values.preview.default }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: preview-{{ $env }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - matrix:
+        generators:
+          - pullRequest:
+              requeueAfterSeconds: 30
+              github:
+                owner: {{ .Values.github.owner }}
+                repo: {{ .Values.github.repo }}
+                tokenRef: { secretName: github-token, key: token }
+                labels: [preview]
+          - git:
+              repoURL: {{ .Values.repoURL }}
+              revision: "{{ `{{ .head_sha }}` }}"
+              files:
+                - path: "apps/*/.platform/preview.yaml"
+  template:
+    metadata:
+      name: "preview-{{ `{{ index .path.segments 1 }}` }}-pr-{{ `{{ .number }}` }}"
+    spec:
+      project: preview
+      sources:
+        - repoURL: {{ .Values.repoURL }}
+          targetRevision: "{{ `{{ .head_sha }}` }}"
+          ref: repo
+        - repoURL: {{ .Values.repoURL }}
+          targetRevision: "{{ `{{ .head_sha }}` }}"
+          path: infra/helm-charts/service
+          helm:
+            valueFiles:
+              - $repo/infra/platform-config/environments/{{ $env }}.yaml
+              - $repo/apps/{{ `{{ index .path.segments 1 }}` }}/.platform/values.yaml
+              - $repo/apps/{{ `{{ index .path.segments 1 }}` }}/.platform/preview.yaml
+            valuesObject:
+              image:
+                repository: {{ .Values.global.ecrRegistry }}/{{ .Values.preview.repository }}
+                tag: "pr-{{ `{{ index .path.segments 1 }}` }}-{{ `{{ .head_sha }}` }}"
+              preview:
+                number: "{{ `{{ .number }}` }}"
+                gateLabel: "preview-{{ `{{ index .path.segments 1 }}` }}{{ $suffix }}"
+                labels: "{{ `{{ .labels | join \" \" }}` }}"
+                host: "{{ `{{ index .path.segments 1 }}` }}-{{ `{{ .number }}` }}.{{ .Values.global.previewDomainSuffix }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "preview-{{ `{{ index .path.segments 1 }}` }}-{{ `{{ .number }}` }}"
+      syncPolicy:
+        automated: { prune: true, selfHeal: true, allowEmpty: true }
+        syncOptions: [CreateNamespace=true]
+{{- end }}

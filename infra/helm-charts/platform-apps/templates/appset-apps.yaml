@@ -1,0 +1,71 @@
+{{- /*
+One ApplicationSet per cluster, rendered from the cluster's own environment
+file. Nothing here names a region: the cluster knows its stage and region,
+and an app joins it by adding apps/<app>/.platform/values-<stage>-<region>.yaml.
+*/ -}}
+{{- $stage := .Values.global.stage }}
+{{- $region := .Values.global.region }}
+{{- $env := printf "%s-%s" $stage $region }}
+{{- $prod := eq $stage "prod" }}
+{{- /* prod renders at the SHA inside the promoted tag; nonprod tracks main */ -}}
+{{- $rev := ternary `{{ if and .image .image.tag (regexMatch "^rel-[0-9a-f]{40}$" .image.tag) }}{{ trimPrefix "rel-" .image.tag }}{{ else }}invalid-prod-image-tag{{ end }}` "main" $prod }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps-{{ $env }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - git:
+        repoURL: {{ .Values.repoURL }}
+        revision: main
+        files:
+          - path: "apps/*/.platform/values-{{ $env }}.yaml"
+  {{- if not $prod }}
+  # Image Updater writes image.tag into spec.sources[1].helm.parameters;
+  # without this the AppSet controller would reset it on every reconcile.
+  ignoreApplicationDifferences:
+    - jsonPointers: [/spec/sources/1/helm/parameters]
+  {{- end }}
+  template:
+    metadata:
+      name: "{{ `{{ index .path.segments 1 }}` }}-{{ $env }}"
+      {{- if not $prod }}
+      annotations:
+        argocd-image-updater.argoproj.io/image-list: "app={{ .Values.global.ecrRegistry }}/{{ `{{ index .path.segments 1 }}` }}"
+        argocd-image-updater.argoproj.io/app.update-strategy: newest-build
+        argocd-image-updater.argoproj.io/app.allow-tags: "regexp:^rel-[0-9a-f]{40}$"
+        argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
+        argocd-image-updater.argoproj.io/write-back-method: argocd
+      {{- end }}
+    spec:
+      project: apps
+      sources:
+        - repoURL: {{ .Values.repoURL }}
+          targetRevision: '{{ $rev }}'
+          ref: repo
+        - repoURL: {{ .Values.repoURL }}
+          targetRevision: '{{ $rev }}'
+          path: infra/helm-charts/service
+          helm:
+            valueFiles:
+              - $repo/infra/platform-config/environments/{{ $env }}.yaml
+              - $repo/apps/{{ `{{ index .path.segments 1 }}` }}/.platform/values.yaml
+              - $repo/apps/{{ `{{ index .path.segments 1 }}` }}/.platform/values-{{ $env }}.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "app-{{ `{{ index .path.segments 1 }}` }}"
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ApplyOutOfSyncOnly=true, RespectIgnoreDifferences=true, PrunePropagationPolicy=background]
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers: [/spec/replicas]
+        - group: argoproj.io
+          kind: Rollout
+          jsonPointers: [/spec/replicas, /spec/restartAt, /spec/paused]

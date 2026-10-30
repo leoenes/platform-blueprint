@@ -1,0 +1,36 @@
+{{- if include "platform.enabled" (list "traefik" .Values) }}
+# Traefik behind an internal ALB. The namespace label enables ALB readiness
+# gates so a pod only counts as Ready once the ALB reports it healthy.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  {{- include "platform.appMeta" . | nindent 2 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: platform
+  source:
+    repoURL: https://traefik.github.io/charts
+    chart: traefik
+    targetRevision: {{ .Values.traefik.version | quote }}
+    helm:
+      valuesObject:
+        deployment:
+          replicas: 2
+        service:
+          type: ClusterIP
+        ingressRoute:
+          dashboard: { enabled: false }
+        providers:
+          kubernetesCRD: { allowCrossNamespace: true }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+    managedNamespaceMetadata:
+      labels:
+        elbv2.k8s.aws/pod-readiness-gate-inject: enabled
+{{- end }}

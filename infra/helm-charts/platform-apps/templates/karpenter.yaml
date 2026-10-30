@@ -1,0 +1,67 @@
+{{- if include "platform.enabled" (list "karpenter" .Values) }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter
+  {{- include "platform.appMeta" . | nindent 2 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  source:
+    repoURL: public.ecr.aws/karpenter
+    chart: karpenter
+    targetRevision: {{ .Values.karpenter.version | quote }}
+    helm:
+      valuesObject:
+        settings:
+          clusterName: {{ .Values.global.clusterName }}
+          interruptionQueue: Karpenter-{{ .Values.global.clusterName }}
+        replicas: 2
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: karpenter
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  amiSelectorTerms:
+    - alias: bottlerocket@latest
+  role: {{ .Values.global.clusterName }}-karpenter-node   # stable name owned by Terraform
+  subnetSelectorTerms:
+    - tags: { Type: private }
+  securityGroupSelectorTerms:
+    - tags: { "karpenter.sh/discovery": {{ .Values.global.clusterName }} }
+  blockDeviceMappings:
+    - deviceName: /dev/xvdb
+      ebs: { volumeSize: 80Gi, volumeType: gp3, encrypted: true }
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: services
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  template:
+    spec:
+      nodeClassRef: { group: karpenter.k8s.aws, kind: EC2NodeClass, name: default }
+      requirements:
+        - { key: karpenter.sh/capacity-type, operator: In, values: {{ .Values.karpenter.capacityTypes | toJson }} }
+        - { key: karpenter.k8s.aws/instance-family, operator: In, values: {{ .Values.karpenter.instanceFamilies | toJson }} }
+        - { key: kubernetes.io/arch, operator: In, values: [amd64] }
+      expireAfter: 720h
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+  limits:
+    cpu: "64"
+    memory: 256Gi
+{{- end }}

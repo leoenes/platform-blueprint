@@ -1,0 +1,8 @@
+# Applied on top of values.yaml for PR previews (label: preview-example-api).
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 1
+rollout:
+  strategy: none
+database:
+  inCluster: true # throwaway postgres in the preview namespace, no RDS

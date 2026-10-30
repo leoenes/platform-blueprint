@@ -1,0 +1,5 @@
+# Buildkite entry point: the only static step. See infra/delivery/README.md for the
+# GitHub Actions implementation of the same graph.
+steps:
+  - label: ":pipeline: generate"
+    command: infra/delivery/buildkite/generate-pipeline.sh | buildkite-agent pipeline upload

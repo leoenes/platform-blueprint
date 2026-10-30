@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":semanticCommitTypeAll(chore)",
+    ":dependencyDashboard",
+    ":timezone(Europe/London)"
+  ],
+  "dependencyDashboardApproval": true,
+  "prConcurrentLimit": 1,
+  "rangeStrategy": "bump",
+  "rebaseWhen": "behind-base-branch",
+  "separateMajorMinor": false,
+  "enabledManagers": ["mise", "github-actions", "terraform", "custom.regex"],
+  "packageRules": [
+    { "groupName": "managed dependencies", "matchManagers": ["mise", "github-actions", "terraform", "custom.regex"] },
+    { "matchUpdateTypes": ["major"], "matchPackageNames": ["hashicorp/aws", "terraform-aws-modules/**"], "addLabels": ["major-bump"] }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "ArgoCD Application Helm sources in platform-apps templates",
+      "fileMatch": ["^infra/helm-charts/platform-apps/templates/.+\\.ya?ml$"],
+      "matchStrings": ["repoURL: (?<registryUrl>https://[^\\s]+)\\s+chart: (?<depName>[^\\s]+)\\s+targetRevision: \"?(?<currentValue>[^\\s\"]+)\"?"],
+      "datasourceTemplate": "helm"
+    }
+  ]
+}

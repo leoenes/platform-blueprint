@@ -1,0 +1,10 @@
+# Which key encrypts which file. One KMS key per tenant (created by the
+# foundations/sops layer); nobody's laptop key is a creation rule. Rules match
+# the tenant, not the region, so a new region needs no entry here.
+creation_rules:
+  - path_regex: secrets/acme-nonprod-uk-.*\.enc\.yaml$
+    kms: arn:aws:kms:eu-west-2:111111111111:key/00000000-0000-0000-0000-000000000000
+  - path_regex: secrets/acme-nonprod-us-.*\.enc\.yaml$
+    kms: arn:aws:kms:us-east-1:222222222222:key/00000000-0000-0000-0000-000000000000
+  - path_regex: secrets/acme-prod-uk-.*\.enc\.yaml$
+    kms: arn:aws:kms:eu-west-2:333333333333:key/00000000-0000-0000-0000-000000000000

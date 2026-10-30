@@ -1,0 +1,34 @@
+# Human access registry: one entry per person drives every system.
+# Identity, SSO and database grants are never inherited from a team bundle;
+# everything else (Slack, GitHub teams, VPN groups, SaaS roles) can be.
+#
+# Changing this file impacts every consumer project in digger.yml, so one PR
+# shows the plan for all of them: IAM Identity Center, GitHub org, VPN,
+# observability roles, Slack channels, and per-database roles.
+
+people:
+  jdoe:
+    identityCenterUsername: jane.doe
+    givenName: Jane
+    familyName: Doe
+    createSsoUser: true
+    teams: [platform]
+    access:
+      github: { role: admin }       # explicit field replaces the bundle's
+      slack: { channels: [infra-alerts] }   # Slack is additive: bundle + user
+
+  asmith:
+    identityCenterUsername: alex.smith
+    givenName: Alex
+    familyName: Smith
+    createSsoUser: true
+    teams: [backend]
+    access:
+      vpn: null                      # null disables a service the bundle grants
+
+  contractor1:
+    identityCenterUsername: sam.contractor
+    givenName: Sam
+    familyName: Contractor
+    createSsoUser: false             # GitHub + Slack only, no AWS
+    teams: [backend]

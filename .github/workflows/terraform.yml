@@ -1,0 +1,254 @@
+name: Terraform
+
+# PR opened/updated  → plan every impacted project, all in parallel (stage 0).
+# Comment `digger apply [-p <project>]` → apply, ordered by dependency depth:
+# stage N waits for stage N-1, and only runs if N-1 succeeded.
+#
+# Nothing applies on push to main. The apply happens from the PR, against the
+# exact plan that was reviewed (see run-project.sh fingerprint), and the PR is
+# merged afterwards so main always describes what is deployed.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+    paths:
+      - "infra/terraform/**"
+      - "infra/access/*.yaml"
+      - "digger.yml"
+      - ".github/workflows/terraform.yml"
+      - ".github/scripts/digger/**"
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only compute the matrices"
+        type: boolean
+        default: true
+
+# One plan run per PR; one apply run per PR. Never cancel: a cancelled apply
+# is worse than a slow one.
+concurrency:
+  group: ${{ github.event_name == 'issue_comment' && startsWith(github.event.comment.body, 'digger apply') && format('tf-apply-{0}', github.event.issue.number) || format('tf-plan-{0}', github.event.pull_request.number || github.event.issue.number || github.ref) }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  issues: write
+
+env:
+  TG_CI_MODE: "1"
+  AWS_BOOTSTRAP_ROLE: arn:aws:iam::666666666666:role/gh-actions-terraform
+
+jobs:
+  # digger.yml is generated from the directory tree; a stale copy means a
+  # region or layer was added without being picked up by CI.
+  inventory:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: .github/scripts/digger/generate-inventory.sh --check
+
+  detect:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'digger ')
+    outputs:
+      mode: ${{ steps.impacted.outputs.mode }}
+      has-projects: ${{ steps.impacted.outputs.has-projects }}
+      checkout-sha: ${{ steps.snapshot.outputs.checkout-sha }}
+      head-sha: ${{ steps.snapshot.outputs.head-sha }}
+      pr-number: ${{ steps.snapshot.outputs.pr-number }}
+      stage0-matrix: ${{ steps.impacted.outputs.stage0-matrix }}
+      stage0-count: ${{ steps.impacted.outputs.stage0-count }}
+      stage1-matrix: ${{ steps.impacted.outputs.stage1-matrix }}
+      stage1-count: ${{ steps.impacted.outputs.stage1-count }}
+      stage2-matrix: ${{ steps.impacted.outputs.stage2-matrix }}
+      stage2-count: ${{ steps.impacted.outputs.stage2-count }}
+      stage3-matrix: ${{ steps.impacted.outputs.stage3-matrix }}
+      stage3-count: ${{ steps.impacted.outputs.stage3-count }}
+      plan-hashes: ${{ steps.plans.outputs.plan-hashes }}
+    steps:
+      # Bind the whole run to one immutable snapshot. For a comment, that is
+      # the PR's merge commit at the time the comment was posted; a later
+      # push to the PR cannot change what gets applied.
+      - name: Resolve snapshot
+        id: snapshot
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require('@actions/core');
+            if (context.eventName === 'pull_request') {
+              core.setOutput('checkout-sha', context.sha);
+              core.setOutput('head-sha', context.payload.pull_request.head.sha);
+              core.setOutput('base-sha', context.payload.pull_request.base.sha);
+              core.setOutput('pr-number', context.payload.pull_request.number);
+              return;
+            }
+            if (context.eventName === 'issue_comment') {
+              if (!context.payload.issue.pull_request) core.setFailed('not a PR comment');
+              if (context.runAttempt > 1) core.setFailed('re-running an apply is not allowed; post a new comment');
+              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.issue.number });
+              if (pr.state !== 'open' || pr.merged) core.setFailed('PR is not open');
+              if (!pr.merge_commit_sha) core.setFailed('PR has no merge commit (conflicts?)');
+              core.setOutput('checkout-sha', pr.merge_commit_sha);
+              core.setOutput('head-sha', pr.head.sha);
+              core.setOutput('base-sha', pr.base.sha);
+              core.setOutput('pr-number', pr.number);
+              await github.rest.reactions.createForIssueComment({ ...context.repo, comment_id: context.payload.comment.id, content: 'eyes' });
+              return;
+            }
+            core.setOutput('checkout-sha', context.sha);
+            core.setOutput('head-sha', context.sha);
+            core.setOutput('base-sha', 'origin/main');
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.snapshot.outputs.checkout-sha }}
+          fetch-depth: 0
+
+      - name: Changed files
+        id: changed
+        run: |
+          set -euo pipefail
+          {
+            echo 'files<<__EOF__'
+            git diff --name-only "${{ steps.snapshot.outputs.base-sha }}...${{ steps.snapshot.outputs.head-sha }}"
+            echo '__EOF__'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compute impacted projects and stages
+        id: impacted
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: .github/scripts/digger/compute-impacted.sh
+
+      # Apply mode: read the fingerprints of the plans that were reviewed.
+      # They live as hidden markers in the bot's plan comment.
+      - name: Resolve reviewed plan fingerprints
+        id: plans
+        if: steps.impacted.outputs.mode == 'apply'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.snapshot.outputs.pr-number }}
+          HEAD_SHA: ${{ steps.snapshot.outputs.head-sha }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+            --jq '[.[] | select(.user.type == "Bot" and (.body | contains("<!-- tf-grouped-plan-v1 -->")))] | last | .body // ""')
+          [ -n "$body" ] || { echo "::error::no plan report found; run a plan first"; exit 1; }
+          hashes=$(grep -oE '<!-- tf-plan-fingerprint-v1 project=[A-Za-z0-9_-]+ head=[0-9a-f]{40} sha256=[0-9a-f]{64} -->' <<<"$body" \
+            | awk -v head="$HEAD_SHA" '{ split($3,p,"="); split($4,h,"="); split($5,s,"="); if (h[2]==head) printf "%s %s\n", p[2], substr(s[2],1,64) }' \
+            | jq -R -s 'split("\n") | map(select(length>0) | split(" ") | {(.[0]): .[1]}) | add // {}')
+          [ "$hashes" != "{}" ] || { echo "::error::plan report is for another head SHA; re-plan"; exit 1; }
+          echo "plan-hashes=$(jq -c . <<<"$hashes")" >> "$GITHUB_OUTPUT"
+
+      - name: Mark plan in progress
+        if: steps.impacted.outputs.mode == 'plan' && steps.snapshot.outputs.pr-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.snapshot.outputs.pr-number }}
+        run: .github/scripts/digger/plan-status.sh start
+
+  stage0:
+    needs: detect
+    if: needs.detect.outputs.has-projects == 'true' && needs.detect.outputs.stage0-count != '0' && inputs.dry_run != true
+    uses: ./.github/workflows/terraform-stage.yml
+    with:
+      stage: 0
+      matrix: ${{ needs.detect.outputs.stage0-matrix }}
+      mode: ${{ needs.detect.outputs.mode }}
+      checkout-sha: ${{ needs.detect.outputs.checkout-sha }}
+      head-sha: ${{ needs.detect.outputs.head-sha }}
+      pr-number: ${{ needs.detect.outputs.pr-number }}
+      plan-hashes: ${{ needs.detect.outputs.plan-hashes }}
+    secrets: inherit
+
+  stage1:
+    needs: [detect, stage0]
+    if: always() && !cancelled() && needs.detect.result == 'success' && (needs.detect.outputs.mode != 'apply' || needs.stage0.result == 'success') && needs.detect.outputs.stage1-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with:
+      stage: 1
+      matrix: ${{ needs.detect.outputs.stage1-matrix }}
+      mode: ${{ needs.detect.outputs.mode }}
+      checkout-sha: ${{ needs.detect.outputs.checkout-sha }}
+      head-sha: ${{ needs.detect.outputs.head-sha }}
+      pr-number: ${{ needs.detect.outputs.pr-number }}
+      plan-hashes: ${{ needs.detect.outputs.plan-hashes }}
+    secrets: inherit
+
+  stage2:
+    needs: [detect, stage1]
+    if: always() && !cancelled() && needs.detect.result == 'success' && (needs.detect.outputs.mode != 'apply' || needs.stage1.result == 'success') && needs.detect.outputs.stage2-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with:
+      stage: 2
+      matrix: ${{ needs.detect.outputs.stage2-matrix }}
+      mode: ${{ needs.detect.outputs.mode }}
+      checkout-sha: ${{ needs.detect.outputs.checkout-sha }}
+      head-sha: ${{ needs.detect.outputs.head-sha }}
+      pr-number: ${{ needs.detect.outputs.pr-number }}
+      plan-hashes: ${{ needs.detect.outputs.plan-hashes }}
+    secrets: inherit
+
+  stage3:
+    needs: [detect, stage2]
+    if: always() && !cancelled() && needs.detect.result == 'success' && (needs.detect.outputs.mode != 'apply' || needs.stage2.result == 'success') && needs.detect.outputs.stage3-count != '0'
+    uses: ./.github/workflows/terraform-stage.yml
+    with:
+      stage: 3
+      matrix: ${{ needs.detect.outputs.stage3-matrix }}
+      mode: ${{ needs.detect.outputs.mode }}
+      checkout-sha: ${{ needs.detect.outputs.checkout-sha }}
+      head-sha: ${{ needs.detect.outputs.head-sha }}
+      pr-number: ${{ needs.detect.outputs.pr-number }}
+      plan-hashes: ${{ needs.detect.outputs.plan-hashes }}
+    secrets: inherit
+
+  aggregate:
+    needs: [detect, stage0, stage1, stage2, stage3]
+    if: always() && !cancelled() && needs.detect.result == 'success' && needs.detect.outputs.has-projects == 'true' && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.detect.outputs.checkout-sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stage-*
+          path: results
+      - name: Post grouped report to the PR
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.detect.outputs.pr-number }}
+          MODE: ${{ needs.detect.outputs.mode }}
+          HEAD_SHA: ${{ needs.detect.outputs.head-sha }}
+          STAGE_COUNTS: ${{ needs.detect.outputs.stage0-count }} ${{ needs.detect.outputs.stage1-count }} ${{ needs.detect.outputs.stage2-count }} ${{ needs.detect.outputs.stage3-count }}
+        run: |
+          EXPECTED_COUNT=$(( $(tr ' ' '+' <<<"$STAGE_COUNTS") ))
+          export EXPECTED_COUNT
+          .github/scripts/digger/post-report.sh results
+      - name: Notify Slack (apply only)
+        if: needs.detect.outputs.mode == 'apply'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_INFRA }}
+          PR_NUMBER: ${{ needs.detect.outputs.pr-number }}
+          OUTCOME: ${{ (contains(needs.*.result, 'failure') || steps.report.outputs.failed-count != '0') && 'failure' || 'success' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ACTOR: ${{ github.actor }}
+        run: .github/scripts/digger/notify-apply-slack.sh results
+      - name: React on the command comment
+        if: github.event_name == 'issue_comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ok = '${{ steps.report.outcome }}' === 'success' && '${{ steps.report.outputs.failed-count }}' === '0';
+            await github.rest.reactions.createForIssueComment({ ...context.repo, comment_id: context.payload.comment.id, content: ok ? 'hooray' : '-1' });

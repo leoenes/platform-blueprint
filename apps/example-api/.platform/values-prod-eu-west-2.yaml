@@ -1,0 +1,7 @@
+# Presence = deployed to prod. image.tag is written only by the promotion
+# commit; ArgoCD reads this file at the SHA embedded in the tag.
+image:
+  tag: rel-0000000000000000000000000000000000000000
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 20

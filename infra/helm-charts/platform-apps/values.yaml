@@ -1,0 +1,34 @@
+# Defaults; infra/platform-config/environments/<stage>-<region>.yaml overrides
+# per cluster. That file is the only place a cluster describes itself.
+global:
+  stage: ""        # nonprod | prod
+  region: ""
+  accountId: ""
+  clusterName: ""
+  ecrRegistry: ""
+  baseDomain: ""
+  previewDomainSuffix: ""
+
+repoURL: https://github.com/acme/platform.git
+github:
+  owner: acme
+  repo: platform
+
+disabledTools: []
+disabledServices: []
+
+preview:
+  enabled: false
+  default: false        # the cluster that answers to the bare `preview-<app>` label
+  repository: preview-apps
+
+karpenter:
+  version: 1.15.1
+  capacityTypes: [spot, on-demand]
+  instanceFamilies: [m6i, m6a]
+
+externalSecrets:
+  version: 0.19.2
+
+traefik:
+  version: 37.0.0

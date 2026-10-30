@@ -1,0 +1,3 @@
+# Dependencies are layer names; the inventory generator resolves them to the
+# closest instance (same tenant and region first).
+depends_on: [network, iam-github]
